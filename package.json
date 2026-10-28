@@ -1,0 +1,38 @@
+{
+  "name": "astro-adapter-bunny",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Astro adapter for bunny.net Edge Scripting, as a standalone or middleware script.",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voorhoede/astro-adapter-bunny.git"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --no-error-on-unmatched-pattern",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "rollup": "^4.65.1",
+    "systemjs": "^6.15.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "husky": "^9.1.7",
+    "oxfmt": "^0.74.0",
+    "oxlint": "^1.89.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "astro": "^7.4.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
