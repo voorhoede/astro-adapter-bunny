@@ -1,0 +1,67 @@
+{
+  "name": "astro-adapter-bunny",
+  "version": "0.0.0",
+  "description": "Astro adapter for bunny.net Edge Scripting, run as a middleware script in front of a pull zone whose origin is the storage zone.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware.d.ts",
+      "default": "./dist/middleware.js"
+    },
+    "./image-service": {
+      "types": "./dist/image-service.d.ts",
+      "default": "./dist/image-service.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "default": "./dist/session.js"
+    },
+    "./cache": {
+      "types": "./dist/cache.d.ts",
+      "default": "./dist/cache.js"
+    },
+    "./preview": {
+      "types": "./dist/preview.d.ts",
+      "default": "./dist/preview.js"
+    },
+    "./local-zone": {
+      "types": "./dist/build/local-zone.d.ts",
+      "default": "./dist/build/local-zone.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@bunny.net/edgescript-sdk": "^0.12.1",
+    "esbuild": "^0.25.0"
+  },
+  "peerDependencies": {
+    "astro": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "astro": "^7.2.3",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voorhoede/astro-adapter-bunny.git"
+  }
+}
