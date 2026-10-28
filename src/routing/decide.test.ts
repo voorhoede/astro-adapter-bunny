@@ -51,7 +51,18 @@ test('a file under the assets directory is read, and never rendered', () => {
   );
 });
 
-for (const pathname of ['/_bunny/server/a.js', '/_headers', '/_redirects']) {
+for (const pathname of [
+  '/_bunny/server/a.js',
+  '/_Bunny/server/a.js',
+  '/_BUNNY/server/a.js',
+  '/_bunny//server/a.js',
+  '//_bunny/server/a.js',
+  '/_bunny%2fserver/a.js',
+  '/_headers',
+  '/_Headers',
+  '/_redirects',
+  '/_REDIRECTS',
+]) {
   test(`reserved path ${pathname} is not found`, () => {
     assert.deepEqual(decide(get(pathname), site, none), notFound);
   });
