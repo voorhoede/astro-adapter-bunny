@@ -1,5 +1,5 @@
 import { fill, matchPath } from '../shared/path-pattern.ts';
-import { storageKey, type Format } from './storage-key.ts';
+import { keySegments, storageKey, type Format } from './storage-key.ts';
 
 export type RouteMatch = { type: 'page' | 'endpoint' | 'redirect'; dynamic: boolean };
 
@@ -21,7 +21,7 @@ export type Decision =
 
 export type VisitorRequest = { method: string; pathname: string; search: string };
 
-const RESERVED = new Set(['/_headers', '/_redirects']);
+const RESERVED_FILES = new Set(['_headers', '_redirects']);
 
 export function decide(
   request: VisitorRequest,
@@ -34,7 +34,7 @@ export function decide(
 
   if (local === undefined) return notFound;
   if (local.startsWith(`/${site.assetsDir}/`)) return file(local, site, notFound);
-  if (local.startsWith('/_bunny/') || RESERVED.has(local)) return notFound;
+  if (isReserved(local)) return notFound;
   if (method !== 'GET' && method !== 'HEAD') return { type: 'render' };
 
   const route = match(pathname);
@@ -56,6 +56,12 @@ export function decide(
   if (slash !== undefined) return { type: 'redirect', status: 301, location: slash + search };
 
   return file(local, site, notFound);
+}
+
+// Storage reads through the CDN ignore case, so reserved paths are compared on the key the read would use.
+function isReserved(local: string): boolean {
+  const segments = keySegments(local).map((segment) => segment.toLowerCase());
+  return segments[0] === '_bunny' || (segments.length === 1 && RESERVED_FILES.has(segments[0]!));
 }
 
 function withinBase(pathname: string, base: string): string | undefined {
