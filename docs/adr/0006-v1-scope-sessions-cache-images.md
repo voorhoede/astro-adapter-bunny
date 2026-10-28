@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted (the image service mechanism); proposed (the rest)
 date: 2026-10-28
 ---
 
@@ -19,7 +19,7 @@ Leave all three out of v1, each behind Astro's own extension point so adding one
 
 - **Sessions.** Honor Astro's config; inject no default driver. Users pick an unstorage driver that works over HTTP. Bunny Storage is weak as a store (main region only, no conditional write, no TTL); Bunny Database is unresearched. A driver is its own later milestone after a spike (bunny research open question 7).
 - **Cache provider.** None in v1. Routes set `Cache-Control` themselves, and `caching.finalize` keeps it. Whether Astro strips CDN provider headers inside `app.render()`, and whether a script's `CDN-Tag` is honored for tag purges, are both open (astro and bunny research).
-- **Image service.** `sharpImageService: limited`: Sharp transforms prerendered images at build; on-demand images are served untransformed. Proposed mechanism: Astro 7.4's split between a build-time and a runtime image service, with Sharp at build and the no-op service at runtime, so `sharp` never lands in the server output **[E: L1 step 4]**. No Bunny Optimizer service: whether Optimizer transforms script or middleware responses is open (bunny research open question 4).
+- **Image service.** `sharpImageService: limited`: Sharp transforms prerendered images at build; on-demand images are served untransformed. Mechanism (accepted): when the project uses the default Sharp service, the adapter sets `image.service` to `{ build: sharp, runtime: noop }` with Astro 7.4's split, so images are still optimized at build and the Sharp library is absent from the server output (L1 step 4). A project's own service, or its own split, is left alone. No Bunny Optimizer service: whether Optimizer transforms script or middleware responses is open (bunny research open question 4).
 
 ### Consequences
 

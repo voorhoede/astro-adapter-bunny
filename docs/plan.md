@@ -9,9 +9,9 @@ Work stays inside this repository. Where a milestone needs deploy tooling behavi
 | # | Milestone | Depends on | Unblocks |
 | --- | --- | --- | --- |
 | M0 | Repository and test setup | none | everything |
-| S1.1 | Spike, Bunny: the loader | M0 | L2, M2 |
-| L1 | Spike, local: Astro facts | none (before or during M2) | M2 |
-| L2 | Spike, local: bundle and loader | S1.1 | M2, M3 |
+| S1.1 | Spike, Bunny: the loader (done) | M0 | L2, M2 |
+| L1 | Spike, local: Astro facts (done) | none (before or during M2) | M2 |
+| L2 | Spike, local: bundle and loader (done) | S1.1 | M2, M3 |
 | S1 | Spike, Bunny: steps 2 to 10 | S1.1 (parallel to M1 and M2) | M3, M4, M5 |
 | M1 | Request decision, caching and header rules, pure | M0 | M4, M5 |
 | M2 | Astro integration and build output, parts included | M0, L1, L2 | M3 |
@@ -38,6 +38,7 @@ Server code is split from the first build on, so there is no post-release split 
 4. Sharp: the default service at build, absent from server output.
 
 - **Done when:** a dated note answers each with the test app config used.
+- **Done:** [2026-10-28 note](spikes/2026-10-28-l1.md).
 
 ## L2: spike, local bundle and loader
 
@@ -49,15 +50,16 @@ Server code is split from the first build on, so there is no post-release split 
 6. Search the newest bunny CLI's README and binary for `_headers` and `_redirects`.
 
 - **Done when:** a dated note answers each, and the per-route budget is written into ADR 0007.
+- **Done:** [2026-10-28 note](spikes/2026-10-28-l2.md); the budget is in ADR 0007.
 
 ## S1: spike, Bunny
 
 One throwaway zone pair (middleware and standalone). Step 1 (S1.1) runs right after M0 and before L2 and M2, because it can break the split decision; the other steps follow in this order:
 
-1. **Loader:** does `import()` still fail in every form; does indirect `(0, eval)` run; does `s.js` load a chain of `System.register` parts through its fetch hook from the Storage API; SHA-256 time.
-2. **Builtins:** `constants`, `path/win32`, bare `buffer`.
+1. **Loader:** does `import()` still fail in every form; does indirect `(0, eval)` run; does `s.js` load a chain of `System.register` parts through its fetch hook from the Storage API; SHA-256 time. Done as S1.1: [2026-10-28 note](spikes/2026-10-28-s1-1.md).
+2. **Builtins and WebAssembly:** `constants`, `path/win32`, bare `buffer`. Done for `child_process`, `vm` and `worker_threads` (each breaks startup) and for WebAssembly (compiles), together with the eager size limits: [note](spikes/2026-10-28-s1-2.md).
 3. **Part transport** (ADR 0007), in this order:
-   - 3a. Cache API in both script types, from three regions: hit and miss latency, how long a part survives before eviction, per PoP or per region.
+   - 3a. Cache API in both script types, from three regions: hit and miss latency, how long a part survives before eviction, per PoP or per region, and whether `match` and `put` count as subrequests.
    - 3b. The decisive check for the alternative: does an edge rule block a request without the secret header even when the object is already in the CDN cache?
    - 3c. One module against split, cold, from the same three regions.
    - Decision rule: keep the Cache API if it is fast enough and parts stay cached long enough; otherwise switch to the pull zone alternative, only if 3b passes. Also: the part path requested by a visitor answers 404 in both types.
@@ -79,7 +81,8 @@ One throwaway zone pair (middleware and standalone). Step 1 (S1.1) runs right af
 
 ## M2: Astro integration and build output
 
-- **Scope:** `bunny(options)`, `setAdapter` fields, build output detection and the island check (ADR 0003), `staticHeaders` only with a script, forcing `build.redirects: false` for script builds, parsing `_headers` and `_redirects`, `build/bundle` emitting `dist/index.js` plus grouped parts with hashes under `dist/client/_bunny/server/`, the eager size check, the budget check, the builtin check, `requires.env` from the schema, `.bunny/build.json` (ADR 0004). The script entries are stubs that answer 501.
+- **Scope:** `bunny(options)`, `setAdapter` fields, build output detection, islands included (ADR 0003), `staticHeaders` only with a script, forcing `build.redirects: false` for script builds, parsing `_headers` and `_redirects`, `build/bundle` emitting `dist/index.js` plus grouped parts with hashes under `dist/client/_bunny/server/`, the eager size check, the budget check, the builtin check, `requires.env` from the schema, `.bunny/build.json` (ADR 0004). The script entries are stubs that answer 501.
+- **Pull requests:** three in the stack: the `_headers` and `_redirects` parsers with the build manifest, then `build/bundle`, then the integration.
 - **Done when:** the build layer of `docs/testing.md` passes for `test/app` in its four builds and every fixture; `static-only` has no script; `oversize` behaves as testing.md says; no secret value appears in the script, parts or manifest; the build logs the script type.
 - **Depends on:** M0, L1, L2.
 
@@ -123,7 +126,7 @@ Runs in the reference site's repository, after the first release.
 
 ## Deploy tooling, outside this plan
 
-Changes the deploy tool needs are listed here and made in their own track, not from this repository: the smoke test must not pick a file under `_bunny/server/`, and if S1 picks the pull zone alternative for parts, the deploy tool creates its edge rule and shared secret.
+Changes the deploy tool needs are listed here and made in their own track, not from this repository: the smoke test must not pick a file under `_bunny/server/`; the bunny-edge-deploy Action's `_headers` and `_redirects` parser has to learn `! Name` (dropped today), `:splat` and `:placeholder` (kept literally) and query conditions (read as literal paths) before static builds match script builds (L2 step 5, ADR 0008); and if S1 picks the pull zone alternative for parts, the deploy tool creates its edge rule and shared secret.
 
 ## Later, not planned yet
 

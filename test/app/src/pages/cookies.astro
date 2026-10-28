@@ -1,0 +1,6 @@
+---
+export const prerender = false;
+Astro.cookies.set('first', 'a', { path: '/' });
+Astro.cookies.set('second', 'b', { path: '/', sameSite: 'none', secure: true, partitioned: true });
+---
+<p>cookies</p>
