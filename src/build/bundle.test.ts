@@ -142,7 +142,13 @@ test('Node builtins stay outside the bundle and are listed', async () => {
   assert.deepEqual(output.builtins, ['node:path']);
 });
 
-for (const builtin of ['node:child_process', 'node:vm', 'node:worker_threads']) {
+for (const builtin of [
+  'node:child_process',
+  'node:vm',
+  'node:worker_threads',
+  'node:constants',
+  'node:path/win32',
+]) {
   test(`${builtin}, which bunny.net does not run, fails the build`, async () => {
     const dir = await serverOutput({ 'entry.mjs': `import '${builtin}'; export default 1;` });
     await assert.rejects(bundle({ dir, entry: 'entry.mjs' }), new RegExp(builtin));

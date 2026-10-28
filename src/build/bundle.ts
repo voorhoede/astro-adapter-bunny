@@ -19,7 +19,13 @@ const EAGER_WARN_BYTES = 1024 * 1024;
 const EAGER_FAIL_BYTES = 7 * 1024 * 1024;
 
 const BUILTINS = new Set(builtinModules);
-const UNSUPPORTED_BUILTINS = new Set(['child_process', 'vm', 'worker_threads']);
+const UNSUPPORTED_BUILTINS = new Set([
+  'child_process',
+  'vm',
+  'worker_threads',
+  'constants',
+  'path/win32',
+]);
 
 export async function bundle({
   dir,
@@ -41,7 +47,7 @@ export async function bundle({
           if (!BUILTINS.has(name) && !BUILTINS.has(root)) {
             throw new Error(`${id}, imported by ${importer}, was not bundled by Astro.`);
           }
-          if (UNSUPPORTED_BUILTINS.has(root)) {
+          if (UNSUPPORTED_BUILTINS.has(name) || UNSUPPORTED_BUILTINS.has(root)) {
             throw new Error(`${id}, imported by ${importer}, does not run on bunny.net.`);
           }
           builtins.add(`node:${name}`);
