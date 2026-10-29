@@ -55,7 +55,7 @@ Organized by domain, named as Astro and bunny.net name things.
 | `scripts/middleware` | Middleware entry | none; registers `onOriginRequest` and `onOriginResponse` | Carrying the visitor path between hooks, rewriting to the origin, catching every throw |
 | `scripts/standalone` | Standalone entry | none; calls `serve` | Calling `storage`, catching every throw |
 | `build` | The Astro integration | `bunny(options?): AstroIntegration` | `setAdapter` fields, build output detection from the server entry, virtual module, forced config (`build.redirects: false`, `vite.ssr.noExternal`, the Sharp split of ADR 0006), parsing `_headers` and `_redirects`, Astro redirects appended to `_redirects` in static builds, `requires.env` from the env schema, `.bunny/build.json` |
-| `build/bundle` | Server code to one script | `bundle({ dir, entry }): Promise<ServerOutput>` | A Rollup pass over Astro's server output to `System.register`, with Rollup's default chunking, which chunks are eager, stripping server files from `entryModules`, the Shiki wasm rewrite, minify with Rolldown's minifier, brotli and base64 packing, the source map, script size and builtin checks |
+| `build/bundle` | Server code to one script | `bundle({ dir, entry }): Promise<Script>`, the script with its source map | A Rollup pass over Astro's server output to `System.register`, with Rollup's default chunking, which chunks are eager, stripping server files from `entryModules`, the Shiki wasm rewrite, minify with Rolldown's minifier, brotli and base64 packing, the source map, script size and builtin checks |
 | `preview` | `astro preview` | Astro's `previewEntrypoint` contract | A local Node server running the built script against `dist/client` |
 
 Notes:

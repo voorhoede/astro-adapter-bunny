@@ -80,7 +80,7 @@ Not run: step 8 (reserved paths answer 404 in both types) and step 9 (a storage 
 
 ## M3: the packed script
 
-- **Scope:** `build/bundle` assembling `dist/index.js` from `s.js`, the eager chunks and every lazy chunk brotli-compressed and base64-encoded in string literals; the Shiki wasm rewrite, skipped when the pattern is missing; stripping server files from `entryModules`; minify with Rolldown's minifier (`keepNames`, `legalComments: 'inline'`) and the source map at `dist/index.js.map`; the size check on the whole script (warn above 1 MB, fail above 7 MB); dropping `assets.reserved` from the manifest. `packed-loader` with the loader hook (`Uint8Array.fromBase64`, `DecompressionStream('brotli')`, indirect `eval`). `storage` with path safety and the once-per-isolate log; `platform` with the lazy deploy global (ADR 0007).
+- **Scope:** `build/bundle` assembling `dist/index.js` from `s.js`, the eager chunks and every lazy chunk brotli-compressed and base64-encoded in string literals; the Shiki wasm rewrite, skipped when the pattern is missing; stripping server files from `entryModules`; minify with Rolldown's minifier (`keepNames`, `legalComments: 'inline'`) and the source map at `dist/index.js.map`; the size check on the whole script (warn above 1 MB, fail above 7 MB); dropping `assets.reserved` from the manifest. `packed-loader` with the loader hook (`Uint8Array.fromBase64`, `DecompressionStream('brotli')`, indirect `eval`). Until M4, the script hands every request to the server entry's `fetch` (ADR 0007).
 - **Done when:** under the local harness, `test/app`'s `/code` renders from the packed script with the same HTML as unpacked; importing the script without the deploy global does not throw and unpacks nothing; `dist/client` holds no server code; the build fails on a refused builtin and on a script above 7 MB; a build without Shiki's wasm pattern still renders.
 - **Also:** drop Rollup's 32 kB merge and its guard from `build/bundle`, and check on `/code` that unmerged chunks cost no unpacking time.
 - **Open, measured here:** where the packed script stops starting (expected near 7 MB of script, about 25 MB of source); a build the size of the reference site; whether a request can fail on subrequests.
@@ -100,7 +100,7 @@ Not run: step 8 (reserved paths answer 404 in both types) and step 9 (a storage 
 
 ## M4: middleware script type
 
-- **Scope:** `app`, `scripts/middleware`, the visitor path hand-off, applying `_headers` and `_redirects` to stored files. The reference site's script type, so it comes first.
+- **Scope:** `app`, `storage` with path safety and the once-per-isolate log, `platform` with the lazy deploy global, `scripts/middleware`, the visitor path hand-off, applying `_headers` and `_redirects` to stored files. The reference site's script type, so it comes first.
 - **Done when:** `test/app/app.test.ts` and `test/fixtures/routing` pass for middleware on the local harness and once on Bunny through the deploy contract of ADR 0004 (the bunny-edge-deploy Action, or a temporary copy under `test/` where it lacks behavior); among them `sitemap-index.xml` under `[locale]`, a POST passing Astro's origin check, multiple `Set-Cookie`, a cookie page never cached, `/code` rendering from the packed script, every reserved path answering 404 (S1 step 8); a storage 404 at a replica and cold `/code` after 30 minutes idle are measured (S1 step 9).
 - **Depends on:** M1, M3, S1.
 
