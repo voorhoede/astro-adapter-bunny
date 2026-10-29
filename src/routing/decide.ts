@@ -68,8 +68,10 @@ export function decide(
 
 // Storage reads through the CDN ignore case, so reserved paths are compared on the key the read would use.
 function isReserved(local: string): boolean {
-  const segments = keySegments(local).map((segment) => segment.toLowerCase());
-  return segments[0] === '_bunny' || (segments.length === 1 && RESERVED_FILES.has(segments[0]!));
+  const [first, ...rest] = keySegments(local).map((segment) => segment.toLowerCase());
+  return (
+    first === '_bunny' || (first !== undefined && rest.length === 0 && RESERVED_FILES.has(first))
+  );
 }
 
 function withinBase(pathname: string, base: string): string | undefined {
