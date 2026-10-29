@@ -27,6 +27,8 @@ const UNSUPPORTED_BUILTINS = new Set([
 const WASM_LITERAL =
   /Uint8Array\.from\(atob\("([A-Za-z0-9+/=]+)"\), \(c\) => c\.charCodeAt\(0\)\)/g;
 const WASM_REFERENCE = /globalThis\.__bunnyWasm\[(\d+)\]/g;
+const CREATE_REQUIRE = 'createRequire(import.meta.url)';
+const REQUIRE_CALL = /\b__require\w*\(\s*"([^"]+)"\s*\)/g;
 const MANIFEST_CALL = 'deserializeManifest(';
 const SOURCE_MAP_COMMENT = /\n?\/\/# sourceMappingURL=\S*\s*$/;
 
@@ -43,6 +45,18 @@ export async function bundle({
 }): Promise<Script> {
   const builtins = new Set<string>();
   const wasm: Buffer[] = [];
+  const builtin = (id: string, by: string) => {
+    const name = id.replace(/^node:/, '');
+    const [root = name] = name.split('/');
+    if (!BUILTINS.has(name) && !BUILTINS.has(root)) {
+      throw new Error(`${id}, ${by}, was not bundled by Astro.`);
+    }
+    if (UNSUPPORTED_BUILTINS.has(name) || UNSUPPORTED_BUILTINS.has(root)) {
+      throw new Error(`${id}, ${by}, does not run on bunny.net.`);
+    }
+    builtins.add(`node:${name}`);
+    return `node:${name}`;
+  };
   const build = await rollup({
     input: join(dir, entry),
     onLog: (level, log) => logger[level](log.message),
@@ -51,16 +65,15 @@ export async function bundle({
         name: 'bunny-builtins',
         resolveId(id, importer) {
           if (id.startsWith('.') || id.startsWith('/') || importer === undefined) return null;
-          const name = id.replace(/^node:/, '');
-          const [root = name] = name.split('/');
-          if (!BUILTINS.has(name) && !BUILTINS.has(root)) {
-            throw new Error(`${id}, imported by ${importer}, was not bundled by Astro.`);
+          return { id: builtin(id, `imported by ${importer}`), external: true };
+        },
+        // A packed chunk has no file URL, so createRequire(import.meta.url) cannot work there.
+        transform(code, id) {
+          for (const [, request = ''] of code.matchAll(REQUIRE_CALL)) {
+            builtin(request, `required by ${id}`);
           }
-          if (UNSUPPORTED_BUILTINS.has(name) || UNSUPPORTED_BUILTINS.has(root)) {
-            throw new Error(`${id}, imported by ${importer}, does not run on bunny.net.`);
-          }
-          builtins.add(`node:${name}`);
-          return { id: `node:${name}`, external: true };
+          if (!code.includes(CREATE_REQUIRE)) return null;
+          return { code: code.replaceAll(CREATE_REQUIRE, 'globalThis.__bunnyRequire'), map: null };
         },
       },
       {

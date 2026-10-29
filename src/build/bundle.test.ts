@@ -152,6 +152,35 @@ test('a Node builtin the server imports works from the script, and is listed', a
   assert.equal(response?.body, 'a/b');
 });
 
+// The shape Rolldown gives a CommonJS dependency, such as postcss, that requires a builtin.
+const commonJs = (id: string) => ({
+  'entry.mjs':
+    "export default { fetch: async () => new Response(String((await import('./page.mjs')).default)) };",
+  'runtime.mjs': [
+    "import { createRequire } from 'node:module';",
+    'var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();',
+    'export { __require };',
+  ].join('\n'),
+  'page.mjs': `import { __require } from './runtime.mjs';\nvar { join } = __require("${id}");\nexport default typeof join === 'function' ? join('a', 'b') : 'none';`,
+});
+
+test('a CommonJS require of a Node builtin works from the script', async () => {
+  const { script, builtins } = await scriptOf(commonJs('path'));
+  assert.ok(builtins.includes('node:path'));
+  const [response] = (await runScript(script, ['/'])).responses;
+  assert.deepEqual(response, { status: 200, body: 'a/b', unpacked: 1 });
+});
+
+test('a CommonJS require of a package that Astro left unbundled fails the build, naming it', async () => {
+  const dir = await serverOutput(commonJs('left-pad'));
+  await assert.rejects(bundle({ dir, entry: 'entry.mjs', logger: silent }), /left-pad/);
+});
+
+test('a CommonJS require of a builtin bunny.net does not run fails the build, naming it', async () => {
+  const dir = await serverOutput(commonJs('child_process'));
+  await assert.rejects(bundle({ dir, entry: 'entry.mjs', logger: silent }), /child_process/);
+});
+
 for (const builtin of [
   'node:child_process',
   'node:vm',

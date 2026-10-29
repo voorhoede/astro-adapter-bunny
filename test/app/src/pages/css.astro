@@ -1,0 +1,6 @@
+---
+import postcss from 'postcss';
+export const prerender = false;
+const { css } = await postcss().process('a { color: red }', { from: undefined });
+---
+<pre>{css}</pre>

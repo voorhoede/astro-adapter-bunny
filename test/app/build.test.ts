@@ -70,13 +70,15 @@ for (const script of ['middleware', 'standalone'] as const) {
       assert.equal(run.unpackedOnLoad, 0);
     });
 
-    test('/code renders from the script with the same HTML as the server build', async () => {
-      const server = await import(`${join(root, 'dist/server/entry.mjs')}?code-${script}`);
-      const expected = await server.default.fetch(new Request('https://example.com/code'));
-      const [response] = (await runScript(join(root, 'dist/index.js'), ['/code'])).responses;
-      assert.equal(response?.status, 200);
-      assert.equal(response?.body, await expected.text());
-    });
+    for (const path of ['/code', '/css']) {
+      test(`${path} renders from the script with the same HTML as the server build`, async () => {
+        const server = await import(`${join(root, 'dist/server/entry.mjs')}?${path}-${script}`);
+        const expected = await server.default.fetch(new Request(`https://example.com${path}`));
+        const [response] = (await runScript(join(root, 'dist/index.js'), [path])).responses;
+        assert.equal(response?.status, 200);
+        assert.equal(response?.body, await expected.text());
+      });
+    }
 
     test("Shiki's wasm in the test app is packed as bytes", async () => {
       const { wasm } = await bundle({
