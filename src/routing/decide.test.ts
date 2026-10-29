@@ -18,8 +18,17 @@ const notFound: Decision = {
   otherwise: { type: 'render' },
 };
 
-function routes(table: Record<string, RouteMatch>) {
-  return (pathname: string) => table[pathname];
+type OnDemand = Pick<RouteMatch, 'type' | 'dynamic'> & Partial<RouteMatch>;
+
+function routes(table: Record<string, OnDemand>) {
+  return (pathname: string): RouteMatch | undefined => {
+    const route = table[pathname];
+    return route && { prerendered: false, index: false, ...route };
+  };
+}
+
+function prerendered(index: boolean, type: RouteMatch['type'] = 'page'): RouteMatch {
+  return { type, dynamic: false, prerendered: true, index };
 }
 
 const none = routes({});
@@ -264,4 +273,114 @@ test('the first matching _redirects rule wins', () => {
     status: 301,
     location: '/first',
   });
+});
+
+const preserve: Site = { ...site, format: 'preserve' };
+
+test('with build.format preserve, a prerendered page not named index reads name.html', () => {
+  assert.deepEqual(decide(get('/blog/a'), preserve, routes({ '/blog/a': prerendered(false) })), {
+    type: 'file',
+    key: 'blog/a.html',
+    otherwise: notFound,
+  });
+});
+
+test('with build.format preserve, a prerendered index page reads name/index.html', () => {
+  assert.deepEqual(decide(get('/docs/x'), preserve, routes({ '/docs/x': prerendered(true) })), {
+    type: 'file',
+    key: 'docs/x/index.html',
+    otherwise: notFound,
+  });
+});
+
+test('with build.format preserve, the root reads index.html', () => {
+  assert.deepEqual(decide(get('/'), preserve, routes({ '/': prerendered(true) })), {
+    type: 'file',
+    key: 'index.html',
+    otherwise: notFound,
+  });
+});
+
+test('with build.format preserve, prerendered pages with params follow their source name', () => {
+  const table = routes({
+    '/posts/hello': { ...prerendered(false), dynamic: true },
+    '/tags/astro': { ...prerendered(true), dynamic: true },
+  });
+  assert.equal(
+    (decide(get('/posts/hello'), preserve, table) as { key: string }).key,
+    'posts/hello.html',
+  );
+  assert.equal(
+    (decide(get('/tags/astro'), preserve, table) as { key: string }).key,
+    'tags/astro/index.html',
+  );
+});
+
+test('with build.format preserve, a path no route claims uses the directory mapping', () => {
+  assert.deepEqual(decide(get('/guide'), preserve, none), {
+    type: 'file',
+    key: 'guide/index.html',
+    otherwise: notFound,
+  });
+});
+
+test('a prerendered page never renders, even when storage has nothing', () => {
+  assert.deepEqual(decide(get('/about'), site, routes({ '/about': prerendered(false) })), {
+    type: 'file',
+    key: 'about/index.html',
+    otherwise: notFound,
+  });
+});
+
+test('trailingSlash always still redirects a prerendered page path without a slash', () => {
+  assert.deepEqual(
+    decide(
+      get('/about'),
+      { ...preserve, trailingSlash: 'always' },
+      routes({ '/about': prerendered(false) }),
+    ),
+    { type: 'redirect', status: 301, location: '/about/' },
+  );
+});
+
+test('a prerendered page with a dot in its name is still a page', () => {
+  const table = routes({ '/hello.world': prerendered(false) });
+  assert.equal(
+    (decide(get('/hello.world'), site, table) as { key: string }).key,
+    'hello.world/index.html',
+  );
+  assert.equal(
+    (decide(get('/hello.world'), { ...site, format: 'file' }, table) as { key: string }).key,
+    'hello.world.html',
+  );
+});
+
+test('a prerendered endpoint keeps its literal name', () => {
+  assert.equal(
+    (
+      decide(
+        get('/robots.txt'),
+        site,
+        routes({ '/robots.txt': prerendered(false, 'endpoint') }),
+      ) as { key: string }
+    ).key,
+    'robots.txt',
+  );
+});
+
+test('a fallback route behaves like a page', () => {
+  assert.deepEqual(
+    decide(get('/fr/about'), site, routes({ '/fr/about': { type: 'fallback', dynamic: false } })),
+    {
+      type: 'render',
+    },
+  );
+  assert.deepEqual(
+    decide(get('/fr/blog/a'), site, routes({ '/fr/blog/a': { type: 'fallback', dynamic: true } })),
+    {
+      type: 'file',
+      key: 'fr/blog/a/index.html',
+      otherwise: { type: 'render' },
+    },
+  );
 });

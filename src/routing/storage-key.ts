@@ -1,13 +1,16 @@
-export type Format = 'directory' | 'file';
+import type { AstroConfig } from 'astro';
 
-export function storageKey(pathname: string, format: Format): string {
+export type Format = AstroConfig['build']['format'];
+
+export type Page = { index: boolean };
+
+export function storageKey(pathname: string, format: Format, page?: Page): string {
   const segments = keySegments(pathname);
   const last = segments.at(-1);
   if (last === undefined) return 'index.html';
-  if (last.includes('.')) return segments.join('/');
-  return format === 'directory'
-    ? [...segments, 'index.html'].join('/')
-    : `${segments.join('/')}.html`;
+  if (!page && last.includes('.')) return segments.join('/');
+  const asIndex = format === 'directory' || (format === 'preserve' && (page?.index ?? true));
+  return asIndex ? [...segments, 'index.html'].join('/') : `${segments.join('/')}.html`;
 }
 
 export function keySegments(pathname: string): string[] {

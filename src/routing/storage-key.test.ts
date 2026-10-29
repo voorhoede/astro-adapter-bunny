@@ -36,3 +36,18 @@ for (const [pathname, key] of unsafe) {
     assert.equal(storageKey(pathname, 'directory'), key);
   });
 }
+
+test('with build.format preserve, a page follows its source name', () => {
+  assert.equal(storageKey('/blog/a', 'preserve', { index: false }), 'blog/a.html');
+  assert.equal(storageKey('/docs/x', 'preserve', { index: true }), 'docs/x/index.html');
+  assert.equal(storageKey('/', 'preserve', { index: true }), 'index.html');
+});
+
+test('with build.format preserve and no page known, the directory mapping is used', () => {
+  assert.equal(storageKey('/guide', 'preserve'), 'guide/index.html');
+});
+
+test('a known page with a dot in its name is not read as a literal file', () => {
+  assert.equal(storageKey('/hello.world', 'directory', { index: false }), 'hello.world/index.html');
+  assert.equal(storageKey('/hello.world', 'file', { index: false }), 'hello.world.html');
+});
