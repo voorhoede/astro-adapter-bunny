@@ -4,7 +4,10 @@ import { builtinModules, createRequire } from 'node:module';
 import { join } from 'node:path';
 import { brotliCompressSync, constants } from 'node:zlib';
 import { minify } from 'rolldown/utils';
+import type { AstroIntegrationLogger } from 'astro';
 import { rollup, type OutputChunk, type RollupOutput } from 'rollup';
+
+export type BuildLogger = Pick<AstroIntegrationLogger, 'warn' | 'info' | 'debug'>;
 
 export type Script = { code: string; map: string; wasm: boolean; builtins: string[] };
 
@@ -29,11 +32,20 @@ const SOURCE_MAP_COMMENT = /\n?\/\/# sourceMappingURL=\S*\s*$/;
 
 const require = createRequire(import.meta.url);
 
-export async function bundle({ dir, entry }: { dir: string; entry: string }): Promise<Script> {
+export async function bundle({
+  dir,
+  entry,
+  logger,
+}: {
+  dir: string;
+  entry: string;
+  logger: BuildLogger;
+}): Promise<Script> {
   const builtins = new Set<string>();
   const wasm: Buffer[] = [];
   const build = await rollup({
     input: join(dir, entry),
+    onLog: (level, log) => logger[level](log.message),
     plugins: [
       {
         name: 'bunny-builtins',

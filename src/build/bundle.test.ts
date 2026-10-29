@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import { runScript } from '../../test/harness/run-script.ts';
-import { bundle, checkScriptSize } from './bundle.ts';
+import { bundle, checkScriptSize, type BuildLogger } from './bundle.ts';
+
+const silent: BuildLogger = { warn: () => {}, info: () => {}, debug: () => {} };
 
 const filler = (kilobytes: number) =>
   `export const data = ${JSON.stringify('x'.repeat(kilobytes * 1024))};`;
@@ -19,7 +21,7 @@ async function serverOutput(files: Record<string, string>) {
 
 async function scriptOf(files: Record<string, string>) {
   const dir = await serverOutput(files);
-  const output = await bundle({ dir, entry: 'entry.mjs' });
+  const output = await bundle({ dir, entry: 'entry.mjs', logger: silent });
   const script = join(dir, 'index.js');
   await writeFile(script, output.code);
   return { ...output, script };
@@ -159,7 +161,7 @@ for (const builtin of [
 ]) {
   test(`${builtin}, which bunny.net does not run, fails the build`, async () => {
     const dir = await serverOutput({ 'entry.mjs': `import '${builtin}'; export default 1;` });
-    await assert.rejects(bundle({ dir, entry: 'entry.mjs' }), new RegExp(builtin));
+    await assert.rejects(bundle({ dir, entry: 'entry.mjs', logger: silent }), new RegExp(builtin));
   });
 }
 
@@ -167,7 +169,24 @@ test('a package import that Astro left unbundled fails the build, naming it', as
   const dir = await serverOutput({
     'entry.mjs': "import pad from 'left-pad'; export default pad;",
   });
-  await assert.rejects(bundle({ dir, entry: 'entry.mjs' }), /left-pad/);
+  await assert.rejects(bundle({ dir, entry: 'entry.mjs', logger: silent }), /left-pad/);
+});
+
+test('Rollup warnings reach the build logger instead of the console', async () => {
+  const dir = await serverOutput({
+    'entry.mjs': 'export default { fetch: () => new Response(String(/*#__PURE__*/ 1 + 2)) };',
+  });
+  const warnings: string[] = [];
+  const printed = mock.method(console, 'warn', () => {});
+  await bundle({
+    dir,
+    entry: 'entry.mjs',
+    logger: { ...silent, warn: (message) => warnings.push(message) },
+  });
+  printed.mock.restore();
+  assert.equal(printed.mock.callCount(), 0);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0] ?? '', /annotation/);
 });
 
 test('a script up to 1 MB passes, above it warns, and above 7 MB fails', () => {

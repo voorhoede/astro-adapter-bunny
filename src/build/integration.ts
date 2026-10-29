@@ -72,7 +72,7 @@ export default function bunny({
           return;
         }
 
-        const output = await bundle({ dir: server, entry: serverEntry });
+        const output = await bundle({ dir: server, entry: serverEntry, logger });
         const scriptBytes = Buffer.byteLength(output.code);
         if (checkScriptSize(scriptBytes) === 'warn') {
           logger.warn(

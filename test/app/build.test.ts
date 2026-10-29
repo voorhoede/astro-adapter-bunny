@@ -79,7 +79,11 @@ for (const script of ['middleware', 'standalone'] as const) {
     });
 
     test("Shiki's wasm in the test app is packed as bytes", async () => {
-      const { wasm } = await bundle({ dir: join(root, 'dist/server'), entry: 'entry.mjs' });
+      const { wasm } = await bundle({
+        dir: join(root, 'dist/server'),
+        entry: 'entry.mjs',
+        logger: { warn: () => {}, info: () => {}, debug: () => {} },
+      });
       assert.equal(wasm, true);
     });
 
