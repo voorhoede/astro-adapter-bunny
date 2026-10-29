@@ -1,5 +1,5 @@
 ---
-status: proposed (static builds and island detection); accepted (`staticHeaders` only with a script, `_headers` and `_redirects` through the deploy tool)
+status: proposed (static builds); accepted (island detection, `staticHeaders` only for `buildOutput: "server"`, `_headers` and `_redirects` through the deploy tool)
 date: 2026-10-28
 ---
 
@@ -20,8 +20,8 @@ date: 2026-10-28
 Read and pass back. A site with no on-demand route, no server islands and no actions builds static: `dist/client` only, `.bunny/build.json` with `kind: "static"` and no `script`, and Astro's own preview. Redirects stay as Astro's meta-refresh files (`build.redirects` is left alone in this case).
 
 - **Headers and redirects (accepted).** `public/_headers` and `public/_redirects` land in `dist/client` unchanged; the deploy tool turns them into bunny.net edge rules (ADR 0008). If they do not fit the 50-rule limit, the deploy fails with a clear message. The adapter warns at build when the rule count exceeds 50.
-- **`staticHeaders` stays off (accepted).** With it on, Astro moves the CSP from a `<meta>` tag into its header map (verified in an Astro 7.4.2 build). Without a script nothing would serve that header, so a static site would silently lose its CSP. The adapter turns `staticHeaders` on only when a script is emitted.
-- **Server islands (proposed).** Astro may report a fully prerendered site with a `server:defer` island as static, which would ship islands that 404. If L1 step 1 confirms this and `astro:config:done` cannot see the island, `astro:build:done` fails the build when prerendered HTML references `/_server-islands/`, with a message on how to get a server build (one on-demand route). No option.
+- **`staticHeaders` stays off (accepted).** With it on, Astro moves the CSP from a `<meta>` tag into its header map (verified in an Astro 7.4.2 build). Without a script nothing would serve that header, so a static site would silently lose its CSP. The adapter turns `staticHeaders` on only when `buildOutput` is `"server"`, since that is the last value it can read before `setAdapter()`. An island site (below) reports `"static"`, so it keeps its CSP in the HTML (L1 step 2).
+- **Server islands (accepted).** Astro reports a fully prerendered site with a `server:defer` island as `buildOutput: "static"`, and the route list cannot tell it apart from one without the island, but Astro still emits a server entry for it (L1 step 1). So there is no build failure: in `astro:build:done` the adapter emits a script whenever a server entry exists, whatever `buildOutput` said. No option.
 
 ### Consequences
 
@@ -33,4 +33,4 @@ Read and pass back. A site with no on-demand route, no server islands and no act
 
 ### Confirmation
 
-M2 builds a fully prerendered test app and checks there is no script, the manifest says `static`, the CSP is still a `<meta>` tag, `_headers` and `_redirects` are in `dist/client`, and a 51-rule fixture warns. L1 step 1 decides the island check; if it ships, a fixture with one `server:defer` on a prerendered site fails the build.
+M2 builds a fully prerendered test app and checks there is no script, the manifest says `static`, the CSP is still a `<meta>` tag, `_headers` and `_redirects` are in `dist/client`, and a 51-rule fixture warns. A fixture with one `server:defer` on a prerendered site gets a script ([L1 note](../spikes/2026-10-28-l1.md)).

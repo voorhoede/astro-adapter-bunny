@@ -1,9 +1,4 @@
-type EnvField = {
-  context: 'server' | 'client';
-  access: 'secret' | 'public';
-  optional?: boolean;
-  default?: unknown;
-};
+import type { AstroConfig } from 'astro';
 
 export type EnvEntry = { name: string; secret?: true; optional?: true };
 
@@ -13,7 +8,7 @@ const STORAGE: EnvEntry[] = [
   { name: 'BUNNY_STORAGE_KEY', secret: true },
 ];
 
-export function requiredEnv(schema: Record<string, EnvField> | undefined): EnvEntry[] {
+export function requiredEnv(schema: AstroConfig['env']['schema'] | undefined): EnvEntry[] {
   const secrets = Object.entries(schema ?? {})
     .filter(([, field]) => field.context === 'server' && field.access === 'secret')
     .map(([name, field]): EnvEntry => {

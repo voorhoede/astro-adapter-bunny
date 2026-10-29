@@ -46,7 +46,7 @@ How the adapter is tested: which layers exist, what each one proves, which app a
 - Checks per build:
   - Layout: `dist/index.js` plus a client directory with parts under `_bunny/server/` (R-BUILD-2); the script imports nothing relative and loads parts only through its storage hook.
   - The script imports on its own: copied alone into an empty temp directory and imported under Deno with `globalThis.Bunny` stubbed and **no** `__BUNNY_DEPLOY__`. It must not throw, must register its handler and must fetch no part. This doubles as the startup probe.
-  - Parts: every part's hash in the import map matches its file; files reachable per route stay within the budget of ADR 0007; the eager script is under the fail threshold.
+  - Parts: every part's hash in the import map matches its file; parts per directly imported target stay within the budget of ADR 0007; the eager script is under the fail threshold.
   - Headers: `staticHeaders` is on only when a script is emitted; the parsed `_headers` and `_redirects` table matches the test app's files; a syntax error fails the build with the line number.
   - `sharp` appears in neither the script nor any part (ADR 0006).
   - `node:` imports are only those that work on Bunny (`F:175`, `F:176`).
@@ -122,7 +122,7 @@ test/
   app/                         the full test app
     astro.config.ts            reads TEST_SCRIPT and TEST_OUTPUT
     src/
-    build.test.ts              build-level checks
+    build.test.ts              build-level checks, for the app and the fixtures
     app.test.ts                HTTP checks, run against all four targets
   fixtures/
     routing/                   tiny site built with several inline configs
@@ -133,7 +133,8 @@ test/
 docs/measurements/             results of measurement runs
 ```
 
-- Each app or fixture folder holds its source and its own checks, so a scenario is one folder.
+- Each app or fixture folder holds its source, so a scenario is one folder. The build-level checks of the app and of `static-only` and `static-islands` live together in `test/app/build.test.ts`.
+- `npm test` runs only `*.test.ts` files under `src/` and `test/`, so nothing a fixture build writes is picked up as a test.
 - `test/` rather than `examples/`: these apps are shaped for assertions (`/cookies`, `/boom`), not for reading as usage examples. An `examples/` folder can come later if the README needs one, and stays out of the test path.
 
 ### Routes of the full app
@@ -177,7 +178,7 @@ Config of the full app: `security.csp` on, `session: false`, a no-op image servi
 | --- | --- | --- | --- |
 | `routing` | `base: '/docs'` with `trailingSlash` `always`, `never`, `ignore`; `build.format: 'file'` with `never`; both script types | Non-default routing config behaves as Astro documents, for stored files and rendered routes | G-3, R-ROUTE-8 |
 | `static-only` | no on-demand routes, with `_headers`, `_redirects` and `security.csp` | No script, `kind: "static"`, the CSP still a `<meta>` tag (`staticHeaders` off), both files copied unchanged into `dist/client`, a warning when a variant has more than 50 rules; Astro's own preview serves it | R-ROUTE-1, ADR 0003 |
-| `static-islands` | only prerendered pages plus one `server:defer` | The build fails with a message on how to get a server build, if L1 step 1 confirms Astro reports it static | G-5, ADR 0003 (proposed) |
+| `static-islands` | only prerendered pages plus one `server:defer` | Gets a script, because Astro emits a server entry although it reports `buildOutput: "static"` (L1 step 1) | G-5, ADR 0003 |
 | `oversize` | a generated module of about 11 MB behind one on-demand route | The build succeeds with it as a part; a variant that pulls it into the eager script fails the build [E: L2 decides how to force it eager] | R-BUILD-5, G-8 |
 
 Later, with their Should requirements: an `i18n` fixture for Astro's own `i18n` routing (it cannot share a build with the full app's hand-rolled `[locale]` routes), and a `sessions` fixture once a driver exists.
@@ -340,7 +341,7 @@ Cities follow the prototype's cold-path measurement: Amsterdam, Frankfurt, Londo
 ## Open questions
 
 1. **Size thresholds.** Proposed for the eager script: warn above 1 MB raw (2 MB of code already cost 460 to 520 ms cold, `F:168`), fail above 7 MB raw (under the lowest failure any source saw). Confirm or set others.
-2. **Per-route budget.** Start value about 10 files [guess, from the prototype], fixed by L2 step 1.
+2. **Per-route budget.** Settled in ADR 0007 from L2: at most 8 parts per directly imported target at build. No runtime guard until a request is shown to fail on subrequests.
 3. **Test account.** The API key is account-wide (`F:210`), so live tests need a Bunny account with nothing else in it. Who owns it, and who pays?
 4. **Live triggers.** Manual, weekly and release gate as proposed, or also a pull request label?
 5. **Live deploy path.** bunny-edge-deploy (tests `.bunny/build.json` end to end with a real reader), the Bunny CLI, or our own script? Depends on what G-2 documents.

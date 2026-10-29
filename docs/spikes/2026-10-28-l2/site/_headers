@@ -1,0 +1,11 @@
+# baseline
+/*
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+
+/embed/*
+  ! X-Frame-Options
+  Content-Security-Policy: frame-ancestors https://partner.example
+
+/robots.txt
+  Cache-Control: public, max-age=60

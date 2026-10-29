@@ -38,7 +38,7 @@ type Decision =
 
 Each script type interprets `file` with its own I/O and, on a 404 from storage, interprets `otherwise`. A catch-all route never gets a path before storage has said it has no file there (ADR 0002).
 
-**What the function does not do.** Route matching. `decide` never calls `app.match()`: the match comes in as a function argument. At runtime `app` backs it with `app.match()`; in unit tests a table backs it, so collisions such as `[locale]` against `/sitemap-index.xml` are unit tests with no Astro build.
+**What the function does not do.** Route matching. `decide` never calls `app.match()`: the match comes in as a function argument. At runtime `app` backs it with `app.match(request, true)`: without the second argument Astro treats redirects as prerendered and answers them with 404 (L1 step 3); in unit tests a table backs it, so collisions such as `[locale]` against `/sitemap-index.xml` are unit tests with no Astro build.
 
 ## Module map
 
@@ -48,14 +48,14 @@ Organized by domain, named as Astro and bunny.net name things.
 | --- | --- | --- | --- |
 | `routing` | What a request becomes | `decide(request, site, match): Decision` | `base`, `trailingSlash`, `build.format` to storage key, `build.assets` prefix, method rules, reserved paths, `_redirects` rules, not-found order |
 | `caching` | Headers on every response leaving the script | `finalize(response, origin: "rendered" \| "stored" \| "adapter", headersFor?): Response` | `Cache-Control` defaults, immutable assets, the `Set-Cookie` and `Vary` rule, applying `_headers` to stored files through a lookup function, never overwriting |
-| `app` | Astro's `App` in this isolate | `match(url)`, `render(request, kind)` | `createApp()` once, `setGetEnv`, `clientAddress` from `x-real-ip`, `waitUntil`, cookie headers, error pages read through `storage` |
+| `app` | Astro's `App` in this isolate | `match(url)`, `render(request, kind)` | `createApp()` once, `app.match(request, true)` so redirect routes match, `setGetEnv`, `clientAddress` from `x-real-ip`, `waitUntil`, cookie headers, error pages read through `storage` |
 | `platform` | Every bunny.net global | `deploy()`, `env(name)`, `waitUntil(p)`, `visitorUrl(request)` | `globalThis.__BUNNY_DEPLOY__` read lazily on first use, `Bunny.v1`, `Deno.env`, rebuilding the URL from `cdn-host` and `https` |
 | `storage` | Read one file of this deploy through the Storage API | `readFile(key, request): Promise<Response \| undefined>` | Storage API host, `AccessKey`, deploy prefix, path safety, one place that builds storage URLs, conditional header passthrough, `Content-Type` from the extension, a 401 or 403 logged once per isolate |
-| `server-parts` | Load server code at runtime | the bundle's `import()` calls resolve through it | SystemJS `s.js`, the part transport (Cache API, then `storage` on a miss, proposed), the hash check, retry after a failed fetch, one fetch for concurrent imports |
+| `server-parts` | Load server code at runtime | the bundle's `import()` calls resolve through it | SystemJS `system.js`, the part transport (Cache API, then `storage` on a miss, proposed), the hash check, retry after a failed fetch through `System.delete`, one fetch for concurrent imports |
 | `scripts/middleware` | Middleware entry | none; registers `onOriginRequest` and `onOriginResponse` | Carrying the visitor path between hooks, rewriting to the origin, catching every throw |
 | `scripts/standalone` | Standalone entry | none; calls `serve` | Calling `storage`, catching every throw |
-| `build` | The Astro integration | `bunny(options?): AstroIntegration` | `setAdapter` fields, build output detection, virtual module, forced config, parsing `_headers` and `_redirects`, `requires.env` from the env schema, `.bunny/build.json` |
-| `build/bundle` | Server code to files | `bundle(entry): Promise<ServerOutput>` | Rolldown ESM, a Rollup pass to `System.register`, chunk grouping, the per-route file budget, part hashes and the import map, eager script size and builtin checks |
+| `build` | The Astro integration | `bunny(options?): AstroIntegration` | `setAdapter` fields, build output detection from the server entry, virtual module, forced config (`build.redirects: false`, `vite.ssr.noExternal`, the Sharp split of ADR 0006), parsing `_headers` and `_redirects`, Astro redirects appended to `_redirects` in static builds, `requires.env` from the env schema, `.bunny/build.json` |
+| `build/bundle` | Server code to files | `bundle({ dir, entry }): Promise<ServerOutput>` | A Rollup pass over Astro's server output to `System.register`, merging below 32 kB only when every `import()` target keeps its own chunk, the budget of 8 parts per directly imported target, part hashes, which files are eager, eager script size and builtin checks |
 | `preview` | `astro preview` | Astro's `previewEntrypoint` contract | A local Node server running the built script against `dist/client` |
 
 Notes:
@@ -121,11 +121,11 @@ flowchart LR
 
 ## Build flow
 
-1. `astro:config:setup`: register the virtual module with build facts. Force `build.redirects: false` when a script will be emitted. Parse `public/_headers` and `public/_redirects` (ADR 0008).
-2. `astro:config:done`: read `buildOutput` before `setAdapter()` and pass it back (ADR 0003). Turn on `staticHeaders` only when a script will be emitted **(accepted)**. Declare `envGetSecret: stable`, `sharpImageService: limited`, `i18nDomains: unsupported`. Derive `requires.env` from `env.schema` **(accepted)**. Log the script type in one line **(accepted)**.
+1. `astro:config:setup`: register the virtual module with build facts. Force `build.redirects: false`, `vite.ssr.noExternal: true`, and the Sharp split when the project uses the default service (ADR 0006).
+2. `astro:config:done`: read `buildOutput` before `setAdapter()` and pass it back (ADR 0003). Turn on `staticHeaders` only when `buildOutput` is `"server"` **(accepted)**. Declare `envGetSecret: stable`, `sharpImageService: limited`, `i18nDomains: unsupported`. Derive `requires.env` from `env.schema` **(accepted)**. Log the script type in one line **(accepted)**.
 3. `astro:build:setup`: point the server environment at the script type's entry.
 4. `astro:build:generated`: take `routeToHeaders` and merge it with `_headers` into one table, per-page headers first.
-5. `astro:build:done`: run `build/bundle` (eager script plus parts, grouped, per-route budget), check eager size and `node:` imports, fail when a fully prerendered build references `/_server-islands/` (proposed, L1), warn when a static build's `_headers` and `_redirects` exceed 50 rules, write `.bunny/build.json`.
+5. `astro:build:done`: parse `_headers` and `_redirects` from `dist/client` (ADR 0008). When Astro emitted a server entry, whatever `buildOutput` said (a prerendered site with a `server:defer` island, L1 step 1), run `build/bundle` (eager script plus parts, grouped, per-target budget) and check eager size and `node:` imports. Otherwise append Astro's redirects to `dist/client/_redirects` and warn when `_headers` and `_redirects` exceed 50 rules. Write `.bunny/build.json`.
 
 No file list is written: static-first lookup does not need one.
 
@@ -147,7 +147,7 @@ Removed against the reference site's current adapter, each with the reason:
 
 ## What the build emits for deploy tools
 
-- `dist/index.js` **(accepted)**: the eager script, as in the bunny CLI's examples. Holds the entry, `routing`, `caching`, `s.js`, the import map with part hashes and the header table.
+- `dist/index.js` **(accepted)**: the eager script, as in the bunny CLI's examples. Holds the entry, `routing`, `caching`, `system.js`, the import map with part hashes and the header table.
 - `dist/client/`: every static file, prerendered pages, `_headers` and `_redirects` as written, and server parts under `dist/client/_bunny/server/` with the content hash in the name **(accepted)**. Not a dotfile, sorts after `_astro`.
 - `.bunny/build.json`, version 1 plus optional fields readers ignore (ADR 0004): `kind`, `script.{entry,type,bytes}`, `assets.dir`, optional `assets.immutable: ["_astro/"]` and `assets.reserved: ["_bunny/"]`, `requires.pullZone`, `requires.env` with the storage variables required in both types and the app's server secrets.
 - Settings the adapter cannot express in v1 (`CacheControlMaxAgeOverride: -1`) go in the README as deploy requirements.
@@ -183,17 +183,17 @@ This adapter is written without reading any other bunny.net adapter.
 
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
-| Indirect `eval` or `s.js` does not run on Bunny **[open: S1 step 1]** | No page renders; the split decision breaks | S1 asks this first; fallback is a fork of `s.js` using `new Function` (measured to work in the prototype) |
-| Too many parts per route **[E: 50 subrequests per request]** | A cold route fails or is slow | Rollup grouping plus a per-route file budget fixed in L2, enforced at build; a packer only if that fails |
+| Too many parts per route **[E: 50 subrequests per request]** | A cold route fails or is slow | Rollup grouping, a budget of 8 parts per directly imported target at build (ADR 0007); whether a request can fail on subrequests is open, since S1 saw 400 in one request; a packer only if that fails |
 | Cache API too slow or evicts parts too soon **[open: S1 step 3a]** | Cold loads fall back to the Storage API at the main region, about 420 ms per round trip from New York | Grouping keeps round trips few; parallel loads from the import map; the pull zone alternative if S1 step 3b passes |
 | Rollup and SystemJS as dependencies | A larger dependency tree, a native binary for Rollup | Accepted (G-10 reworded); CI installs with `npm ci --ignore-scripts` |
-| A fully prerendered site with `server:defer` builds static **[open: L1 step 1]** | Islands 404 | Fail the build with a message on how to get a server build (proposed) |
 | Every on-demand request under a catch-all pays a storage miss first **[E]** | Slower catch-all pages | Measured in S1; an optional file table is a later, additive change |
 | Some `node:` builtins break startup (measured in the prototype: `constants`, `path/win32`) | Every request 400 | Build check fails on both until S1 step 2 says otherwise |
 | Smoke path of a deploy tool picks a server part when there is no `_astro/` file | The deploy rolls back | Tool skips `assets.reserved` paths, or a `smoke.staticPath` field (proposed) |
 | `max-age=0` pages revalidate at storage on every request | 275 ms per HTML request on the reference site | Opt-in `s-maxage` with purges; R-HDR-7 |
 | `ASTRO_KEY` for server islands is read at build **[E]** | A key in the bundle, against R-BUILD-6 | Check in M2; document |
 | Streaming responses on Bunny **[open: astro, streaming]** | Broken or buffered pages | S1 step 5 |
+| `WebAssembly` compilation refused on Bunny **[open: S1 step 2]** | Shiki fails, since it compiles a 622 kB inlined module at runtime (L2 step 2) | S1 checks it |
+| The server output holds absolute paths of the build machine **[open]** | The project root and `node_modules` paths end up in the deployed script (L1) | Not checked yet whether Astro can avoid it |
 
 ## Open questions
 

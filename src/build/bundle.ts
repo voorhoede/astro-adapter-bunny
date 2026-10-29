@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { builtinModules } from 'node:module';
 import { join } from 'node:path';
-import { rollup, type OutputAsset, type OutputChunk } from 'rollup';
+import { rollup, type OutputChunk, type RollupOutput } from 'rollup';
 
 export type Chunk = { fileName: string; code: string; sha256: string; bytes: number };
 
@@ -101,7 +101,7 @@ export async function bundle({
   };
 }
 
-function chunksOf({ output }: { output: Array<OutputChunk | OutputAsset> }): OutputChunk[] {
+function chunksOf({ output }: RollupOutput): OutputChunk[] {
   return output.filter((item): item is OutputChunk => item.type === 'chunk');
 }
 

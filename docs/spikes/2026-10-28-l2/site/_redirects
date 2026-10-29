@@ -1,0 +1,6 @@
+/old /new 301
+/blog/* /posts/:splat 301
+/docs/:slug /handbook/:slug 302
+/go https://example.com/target
+/search?q=:q /find 301
+/app/* /index.html 200
