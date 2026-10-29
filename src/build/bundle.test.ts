@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { bundle, checkEagerSize } from './bundle.ts';
+import { runScript } from '../../test/harness/run-script.ts';
+import { bundle, checkScriptSize } from './bundle.ts';
 
 const filler = (kilobytes: number) =>
   `export const data = ${JSON.stringify('x'.repeat(kilobytes * 1024))};`;
+
+const WASM_HEADER = Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]).toString('base64');
 
 async function serverOutput(files: Record<string, string>) {
   const dir = await mkdtemp(join(tmpdir(), 'bundle-'));
@@ -15,131 +17,137 @@ async function serverOutput(files: Record<string, string>) {
   return dir;
 }
 
-// The entry stands in for Astro's runtime, which is always far above the merge threshold.
-// Pages have side effects, as Astro pages do when they register their component.
+async function scriptOf(files: Record<string, string>) {
+  const dir = await serverOutput(files);
+  const output = await bundle({ dir, entry: 'entry.mjs' });
+  const script = join(dir, 'index.js');
+  await writeFile(script, output.code);
+  return { ...output, script };
+}
+
+// Each page has a side effect, as Astro pages do when they register their component.
 const site = {
   'entry.mjs': [
-    "import { shared } from './shared.mjs';",
-    `export const runtime = ${JSON.stringify('e'.repeat(64 * 1024))};`,
-    "export const pages = { a: () => import('./page-a.mjs'), b: () => import('./page-b.mjs') };",
-    'export default shared;',
+    "import { eager } from './eager.mjs';",
+    'export class NamedThing {}',
+    'function notFound(path) {',
+    '  const unusuallyLongLocalVariableName = `missing ${path}`;',
+    '  return new Response(unusuallyLongLocalVariableName, { status: 404 });',
+    '}',
+    'const pages = {',
+    "  '/a': () => import('./page-a.mjs'),",
+    "  '/b': () => import('./page-b.mjs'),",
+    "  '/wasm': () => import('./wasm.mjs'),",
+    '};',
+    'export default {',
+    '  async fetch(request) {',
+    '    const { pathname } = new URL(request.url);',
+    "    if (pathname === '/eager') return new Response(eager);",
+    "    if (pathname === '/name') return new Response(NamedThing.name);",
+    '    const page = pages[pathname];',
+    '    return page ? new Response(String((await page()).default)) : notFound(pathname);',
+    '  },',
+    '};',
   ].join('\n'),
-  'shared.mjs': "export const shared = 'shared-marker';",
+  'eager.mjs': "export const eager = 'eager-marker';",
   'page-a.mjs':
-    "import { data } from './big.mjs'; import { tiny } from './tiny.mjs'; globalThis.rendered = 'a'; export default data + tiny;",
+    "import { data } from './big.mjs'; import { tiny } from './tiny.mjs'; globalThis.rendered = 'a'; export default `page-a-marker ${data.length} ${tiny}`;",
   'page-b.mjs':
-    "import { tiny } from './tiny.mjs'; globalThis.rendered = 'b'; export default tiny;",
+    "import { tiny } from './tiny.mjs'; globalThis.rendered = 'b'; export default `page-b-marker ${tiny}`;",
   'big.mjs': filler(40),
   'tiny.mjs': 'export const tiny = 2;',
+  'wasm.mjs': `var wasmBinary = Uint8Array.from(atob("${WASM_HEADER}"), (c) => c.charCodeAt(0));\nexport default Array.from(wasmBinary).join(',');`,
 };
 
-test('every chunk is System.register code', async () => {
-  const output = await bundle({ dir: await serverOutput(site), entry: 'entry.mjs' });
-  for (const chunk of output.chunks) assert.match(chunk.code, /^System\.register\(/);
+test('the script loads on its own, registers a handler and unpacks nothing', async () => {
+  const { script } = await scriptOf(site);
+  const run = await runScript(script);
+  assert.equal(run.error, undefined);
+  assert.equal(run.loaded, true);
+  assert.equal(run.unpackedOnLoad, 0);
 });
 
-test('the eager part is the entry and what it imports statically', async () => {
-  const output = await bundle({ dir: await serverOutput(site), entry: 'entry.mjs' });
-  const eagerCode = output.chunks
-    .filter((chunk) => output.eager.includes(chunk.fileName))
-    .map((chunk) => chunk.code)
-    .join('\n');
-  assert.ok(output.eager.includes(output.entry));
-  assert.match(eagerCode, /shared-marker/);
-  assert.doesNotMatch(eagerCode, /x{1000}/);
+test('eager code needs no unpacking', async () => {
+  const { script } = await scriptOf(site);
+  const [eager] = (await runScript(script, ['/eager'])).responses;
+  assert.deepEqual(eager, { status: 200, body: 'eager-marker', unpacked: 0 });
 });
 
-test('merging never moves a lazy page into the eager part, even when the entry is small', async () => {
-  const output = await bundle({
-    dir: await serverOutput({
-      ...site,
-      'entry.mjs':
-        "export const pages = { a: () => import('./page-a.mjs'), b: () => import('./page-b.mjs') };",
-    }),
-    entry: 'entry.mjs',
+test('a route unpacks only the lazy chunks it needs, once per isolate', async () => {
+  const { script } = await scriptOf(site);
+  const [a, b, again] = (await runScript(script, ['/a', '/b', '/a'])).responses;
+  assert.deepEqual(a, { status: 200, body: `page-a-marker ${40 * 1024} 2`, unpacked: 2 });
+  assert.deepEqual(b, { status: 200, body: 'page-b-marker 2', unpacked: 1 });
+  assert.deepEqual(again, { status: 200, body: `page-a-marker ${40 * 1024} 2`, unpacked: 0 });
+});
+
+test('lazy code is in the script only as packed data', async () => {
+  const { code } = await scriptOf(site);
+  assert.match(code, /eager-marker/);
+  assert.doesNotMatch(code, /page-b-marker/);
+  assert.doesNotMatch(code, /x{1000}/);
+});
+
+test('the script is minified and keeps function and class names', async () => {
+  const { code, script } = await scriptOf(site);
+  assert.doesNotMatch(code, /unusuallyLongLocalVariableName/);
+  const [name] = (await runScript(script, ['/name'])).responses;
+  assert.equal(name?.body, 'NamedThing');
+});
+
+test("Shiki's inlined wasm is packed as bytes and decodes to the same bytes", async () => {
+  const { script, wasm } = await scriptOf(site);
+  assert.equal(wasm, true);
+  const [response] = (await runScript(script, ['/wasm'])).responses;
+  assert.equal(response?.body, '0,97,115,109,1,0,0,0');
+});
+
+test("a build without Shiki's wasm pattern still renders, and reports the rewrite as skipped", async () => {
+  const { script, wasm } = await scriptOf({
+    ...site,
+    'wasm.mjs': `const text = atob("${WASM_HEADER}");\nexport default Array.from(text, (c) => c.charCodeAt(0)).join(',');`,
   });
-  const eagerCode = output.chunks
-    .filter((chunk) => output.eager.includes(chunk.fileName))
-    .map((chunk) => chunk.code)
-    .join('\n');
-  assert.doesNotMatch(eagerCode, /x{1000}/);
-  assert.equal(Object.keys(output.targets).length, 2);
+  assert.equal(wasm, false);
+  const [response] = (await runScript(script, ['/wasm'])).responses;
+  assert.equal(response?.body, '0,97,115,109,1,0,0,0');
 });
 
-test('each import() target lists the parts it needs, without the eager ones', async () => {
-  const output = await bundle({ dir: await serverOutput(site), entry: 'entry.mjs' });
-  const targets = Object.values(output.targets);
-  assert.equal(targets.length, 2);
-  for (const files of targets) {
-    for (const file of files) assert.equal(output.eager.includes(file), false);
-  }
-});
-
-test('a chunk smaller than 32 kB that two targets share is merged, so neither needs an extra fetch', async () => {
-  const output = await bundle({ dir: await serverOutput(site), entry: 'entry.mjs' });
-  for (const files of Object.values(output.targets)) {
-    const sizes = files.map(
-      (file) => output.chunks.find((chunk) => chunk.fileName === file)!.bytes,
-    );
-    assert.equal(sizes.filter((bytes) => bytes < 32 * 1024).length <= 1, true);
-  }
-});
-
-test('every chunk carries the SHA-256 of its code', async () => {
-  const output = await bundle({ dir: await serverOutput(site), entry: 'entry.mjs' });
-  for (const chunk of output.chunks) {
-    assert.equal(chunk.sha256, createHash('sha256').update(chunk.code).digest('hex'));
-    assert.equal(chunk.bytes, Buffer.byteLength(chunk.code));
-  }
-});
-
-test('a target that needs more than 8 parts fails the build, naming the target and the count', async () => {
-  const libs = Array.from({ length: 8 }, (_, index) => `lib-${index}.mjs`);
-  const files: Record<string, string> = {
+test("the server manifest's entryModules keep no entry that points at a server file", async () => {
+  const { script } = await scriptOf({
+    ...site,
     'entry.mjs': [
-      "export const heavy = () => import('./heavy.mjs');",
-      ...libs.map((lib, index) => `export const lib${index} = () => import('./${lib}');`),
+      'function deserializeManifest(manifest) { return manifest; }',
+      'var _manifest = deserializeManifest({"entryModules":{',
+      '"\\u0000noop-middleware":"middleware.mjs",',
+      '"/build/host/src/pages/a.astro":"page-a.mjs",',
+      '"astro:scripts/page.js":"_astro/page.Ab12.js"',
+      '}});',
+      'export default { fetch: () => new Response(JSON.stringify(_manifest.entryModules)) };',
     ].join('\n'),
-    'heavy.mjs': libs
-      .map((lib, index) => `export { data as d${index} } from './${lib}';`)
-      .join('\n'),
-  };
-  for (const lib of libs) files[lib] = filler(40);
-  await assert.rejects(
-    bundle({ dir: await serverOutput(files), entry: 'entry.mjs' }),
-    /heavy.*9 parts.*8/s,
-  );
-});
-
-test('a target nested behind another lazy part may need more than 8 parts, since only a route starts there', async () => {
-  const libs = Array.from({ length: 9 }, (_, index) => `lib-${index}.mjs`);
-  const files: Record<string, string> = {
-    'entry.mjs': [
-      `export const runtime = ${JSON.stringify('e'.repeat(64 * 1024))};`,
-      "export const page = () => import('./page.mjs');",
-      ...libs.map((lib, index) => `export const lib${index} = () => import('./${lib}');`),
-    ].join('\n'),
-    'page.mjs':
-      "globalThis.rendered = 'page'; export const grammar = () => import('./grammar.mjs');",
-    'grammar.mjs': libs
-      .map((lib, index) => `export { data as d${index} } from './${lib}';`)
-      .join('\n'),
-  };
-  for (const lib of libs) files[lib] = filler(40);
-  const output = await bundle({ dir: await serverOutput(files), entry: 'entry.mjs' });
-  const grammar = Object.entries(output.targets).find(([name]) => name.startsWith('grammar'));
-  assert.ok(grammar);
-  assert.equal(grammar[1].length, 10);
-});
-
-test('Node builtins stay outside the bundle and are listed', async () => {
-  const output = await bundle({
-    dir: await serverOutput({
-      'entry.mjs': "import { join } from 'node:path'; export default join('a', 'b');",
-    }),
-    entry: 'entry.mjs',
+    'middleware.mjs': 'export const onRequest = (context, next) => next();',
   });
-  assert.deepEqual(output.builtins, ['node:path']);
+  const [response] = (await runScript(script, ['/'])).responses;
+  assert.deepEqual(JSON.parse(response?.body ?? ''), {
+    'astro:scripts/page.js': '_astro/page.Ab12.js',
+  });
+});
+
+test('a source map comes with the script, and the script does not point at it', async () => {
+  const { code, map } = await scriptOf(site);
+  const parsed = JSON.parse(map);
+  assert.equal(parsed.version, 3);
+  assert.ok(JSON.stringify(parsed).includes('entry.mjs'));
+  assert.doesNotMatch(code, /sourceMappingURL/);
+});
+
+test('a Node builtin the server imports works from the script, and is listed', async () => {
+  const { script, builtins } = await scriptOf({
+    'entry.mjs':
+      "import { join } from 'node:path'; export default { fetch: () => new Response(join('a', 'b')) };",
+  });
+  assert.deepEqual(builtins, ['node:path']);
+  const [response] = (await runScript(script, ['/'])).responses;
+  assert.equal(response?.body, 'a/b');
 });
 
 for (const builtin of [
@@ -162,8 +170,8 @@ test('a package import that Astro left unbundled fails the build, naming it', as
   await assert.rejects(bundle({ dir, entry: 'entry.mjs' }), /left-pad/);
 });
 
-test('an eager script up to 1 MB passes, above it warns, and above 7 MB fails', () => {
-  assert.equal(checkEagerSize(900 * 1024), 'ok');
-  assert.equal(checkEagerSize(2 * 1024 * 1024), 'warn');
-  assert.throws(() => checkEagerSize(7.5 * 1024 * 1024), /7 MB/);
+test('a script up to 1 MB passes, above it warns, and above 7 MB fails', () => {
+  assert.equal(checkScriptSize(900 * 1024), 'ok');
+  assert.equal(checkScriptSize(2 * 1024 * 1024), 'warn');
+  assert.throws(() => checkScriptSize(7.5 * 1024 * 1024), /7 MB/);
 });

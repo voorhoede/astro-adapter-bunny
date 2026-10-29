@@ -19,6 +19,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "rolldown": "^1.2.15",
     "rollup": "^4.65.1",
     "systemjs": "^6.15.1"
   },

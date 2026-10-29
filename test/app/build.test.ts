@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, readFile, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { build } from 'astro';
+import { bundle } from '../../src/build/bundle.ts';
+import { runScript } from '../harness/run-script.ts';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const SECRET = 'build-time-secret-value-7c1f';
@@ -42,10 +45,42 @@ for (const script of ['middleware', 'standalone'] as const) {
       assert.equal(written.script.entry, 'dist/index.js');
     });
 
-    test('server parts are written under _bunny/server in the client directory', async () => {
-      const parts = await files(join(root, 'dist/client/_bunny/server'));
-      assert.ok(parts.length > 0);
-      for (const [, code] of await contents(parts)) assert.match(code, /^System\.register\(/);
+    test('the client directory holds no server code', async () => {
+      assert.equal(existsSync(join(root, 'dist/client/_bunny')), false);
+      for (const [file, code] of await contents(await files(join(root, 'dist/client'))))
+        assert.doesNotMatch(code, /System\.register\(/, file);
+    });
+
+    test('the source map lies next to the script, outside the client directory', () => {
+      assert.ok(existsSync(join(root, 'dist/index.js.map')));
+    });
+
+    test('the manifest gives the size of the script and reserves no path', async () => {
+      const written = await manifest(root);
+      assert.equal(written.script.bytes, (await stat(join(root, 'dist/index.js'))).size);
+      assert.equal(written.assets.reserved, undefined);
+    });
+
+    test('the script, copied alone, loads without the deploy global and unpacks nothing', async () => {
+      const alone = join(await mkdtemp(join(tmpdir(), 'script-')), 'index.js');
+      await copyFile(join(root, 'dist/index.js'), alone);
+      const run = await runScript(alone);
+      assert.equal(run.error, undefined);
+      assert.equal(run.loaded, true);
+      assert.equal(run.unpackedOnLoad, 0);
+    });
+
+    test('/code renders from the script with the same HTML as the server build', async () => {
+      const server = await import(`${join(root, 'dist/server/entry.mjs')}?code-${script}`);
+      const expected = await server.default.fetch(new Request('https://example.com/code'));
+      const [response] = (await runScript(join(root, 'dist/index.js'), ['/code'])).responses;
+      assert.equal(response?.status, 200);
+      assert.equal(response?.body, await expected.text());
+    });
+
+    test("Shiki's wasm in the test app is packed as bytes", async () => {
+      const { wasm } = await bundle({ dir: join(root, 'dist/server'), entry: 'entry.mjs' });
+      assert.equal(wasm, true);
     });
 
     test('requires.env lists the storage variables and the server secret, not the public variable', async () => {
@@ -69,7 +104,7 @@ for (const script of ['middleware', 'standalone'] as const) {
     test('Sharp optimizes images at build and is absent from the server output', async () => {
       const client = await files(join(root, 'dist/client/_astro'));
       assert.ok(client.some((file) => file.endsWith('.webp')));
-      for (const [, code] of await contents(await files(join(root, 'dist/client/_bunny/server')))) {
+      for (const [, code] of await contents(await files(join(root, 'dist/server')))) {
         assert.doesNotMatch(code, /detect-libc|sharp-libvips/);
       }
     });

@@ -11,4 +11,16 @@ export default defineConfig({
     builtin: true,
   },
   ignorePatterns: ['docs/**'],
+  overrides: [
+    {
+      // Inlined into the script as one expression, where it evaluates unpacked chunks.
+      files: ['src/build/packed-loader.js'],
+      rules: {
+        'no-eval': 'off',
+        'no-unused-expressions': 'off',
+        'no-underscore-dangle': 'off',
+        'unicorn/consistent-function-scoping': 'off',
+      },
+    },
+  ],
 });

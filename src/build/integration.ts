@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { AstroConfig, AstroIntegration } from 'astro';
 import { adapterConfig, configOverrides, type ImageServiceMode } from './adapter-config.ts';
 import { buildManifest } from './build-manifest.ts';
-import { bundle, checkEagerSize } from './bundle.ts';
+import { bundle, checkScriptSize } from './bundle.ts';
 import { parseHeadersFile } from './headers-file.ts';
 import { parseRedirectsFile } from './redirects-file.ts';
 import { requiredEnv } from './required-env.ts';
@@ -18,9 +18,6 @@ export type Options = {
 
 const EDGE_RULE_LIMIT = 50;
 const require = createRequire(import.meta.url);
-
-// Stands in for the script until the script types land; it never serves a deploy.
-const STUB_SCRIPT = `Bunny.v1.serve(() => new Response('Not implemented yet', { status: 501, headers: { 'cache-control': 'private, no-store' } }));\n`;
 
 export default function bunny({
   script = 'middleware',
@@ -76,29 +73,21 @@ export default function bunny({
         }
 
         const output = await bundle({ dir: server, entry: serverEntry });
-        const eagerBytes = output.chunks
-          .filter((chunk) => output.eager.includes(chunk.fileName))
-          .reduce((sum, chunk) => sum + chunk.bytes, 0);
-        if (checkEagerSize(eagerBytes) === 'warn') {
+        const scriptBytes = Buffer.byteLength(output.code);
+        if (checkScriptSize(scriptBytes) === 'warn') {
           logger.warn(
-            `The eager script is ${(eagerBytes / 1024 / 1024).toFixed(1)} MB; above 1 MB, cold starts slow down.`,
+            `The script is ${(scriptBytes / 1024 / 1024).toFixed(1)} MB; above 1 MB, cold starts slow down.`,
           );
         }
-
-        const partsDir = join(client, '_bunny/server');
-        await mkdir(partsDir, { recursive: true });
-        await Promise.all(
-          output.chunks
-            .filter((chunk) => !output.eager.includes(chunk.fileName))
-            .map((chunk) => writeFile(join(partsDir, chunk.fileName), chunk.code)),
-        );
-        await writeFile(join(fileURLToPath(config.outDir), 'index.js'), STUB_SCRIPT);
+        const outDir = fileURLToPath(config.outDir);
+        await writeFile(join(outDir, 'index.js'), output.code);
+        await writeFile(join(outDir, 'index.js.map'), output.map);
         await writeManifest(
           root,
           buildManifest({
             kind: 'ssr',
             scriptType: script,
-            scriptBytes: Buffer.byteLength(STUB_SCRIPT),
+            scriptBytes,
             ...common,
           }),
         );

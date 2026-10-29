@@ -1,22 +1,15 @@
-import { createHash } from 'node:crypto';
-import { builtinModules } from 'node:module';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { builtinModules, createRequire } from 'node:module';
 import { join } from 'node:path';
+import { brotliCompressSync, constants } from 'node:zlib';
+import { minify } from 'rolldown/utils';
 import { rollup, type OutputChunk, type RollupOutput } from 'rollup';
 
-export type Chunk = { fileName: string; code: string; sha256: string; bytes: number };
+export type Script = { code: string; map: string; wasm: boolean; builtins: string[] };
 
-export type ServerOutput = {
-  entry: string;
-  eager: string[];
-  chunks: Chunk[];
-  targets: Record<string, string[]>;
-  builtins: string[];
-};
-
-const MIN_CHUNK_BYTES = 32 * 1024;
-const PARTS_PER_TARGET = 8;
-const EAGER_WARN_BYTES = 1024 * 1024;
-const EAGER_FAIL_BYTES = 7 * 1024 * 1024;
+const SCRIPT_WARN_BYTES = 1024 * 1024;
+const SCRIPT_FAIL_BYTES = 7 * 1024 * 1024;
 
 const BUILTINS = new Set(builtinModules);
 const UNSUPPORTED_BUILTINS = new Set([
@@ -27,14 +20,18 @@ const UNSUPPORTED_BUILTINS = new Set([
   'path/win32',
 ]);
 
-export async function bundle({
-  dir,
-  entry,
-}: {
-  dir: string;
-  entry: string;
-}): Promise<ServerOutput> {
+// Shiki inlines its WebAssembly as base64 and decodes it on every cold start.
+const WASM_LITERAL =
+  /Uint8Array\.from\(atob\("([A-Za-z0-9+/=]+)"\), \(c\) => c\.charCodeAt\(0\)\)/g;
+const WASM_REFERENCE = /globalThis\.__bunnyWasm\[(\d+)\]/g;
+const MANIFEST_CALL = 'deserializeManifest(';
+const SOURCE_MAP_COMMENT = /\n?\/\/# sourceMappingURL=\S*\s*$/;
+
+const require = createRequire(import.meta.url);
+
+export async function bundle({ dir, entry }: { dir: string; entry: string }): Promise<Script> {
   const builtins = new Set<string>();
+  const wasm: Buffer[] = [];
   const build = await rollup({
     input: join(dir, entry),
     plugins: [
@@ -54,52 +51,81 @@ export async function bundle({
           return { id: `node:${name}`, external: true };
         },
       },
+      {
+        name: 'bunny-pack',
+        async renderChunk(code, chunk) {
+          const rewritten = stripServerEntries(code, dir).replace(WASM_LITERAL, (_, base64) => {
+            wasm.push(Buffer.from(base64, 'base64'));
+            return `globalThis.__bunnyWasm[${wasm.length - 1}]`;
+          });
+          const result = await minify(chunk.fileName, rewritten, {
+            compress: { keepNames: { function: true, class: true } },
+            mangle: { keepNames: true },
+            codegen: { legalComments: 'inline' },
+            sourcemap: true,
+          });
+          if (result.errors.length > 0) {
+            throw new Error(`Minifying ${chunk.fileName} failed: ${result.errors[0]?.message}`);
+          }
+          return { code: result.code, map: result.map ?? null };
+        },
+      },
     ],
   });
-  const separate = chunksOf(await build.generate({ format: 'system' }));
-  const merged = chunksOf(
-    await build.generate({ format: 'system', experimentalMinChunkSize: MIN_CHUNK_BYTES }),
-  );
+  const chunks = chunksOf(await build.generate({ format: 'system', sourcemap: true }));
   await build.close();
 
-  // Merging can move a side-effect-free lazy module into the eager script or into another
-  // lazy part, so it is kept only when every import() target still has a chunk of its own.
-  const mergedTargets = targetsOf(merged);
-  const keepsTargets = [...targetsOf(separate)].every((id) => mergedTargets.has(id));
-  const generated = keepsTargets ? merged : separate;
-  const byName = new Map(generated.map((chunk) => [chunk.fileName, chunk]));
-  const closure = (fileName: string) =>
-    new Set([...closureOf(byName, fileName)].map((c) => c.fileName));
-
-  const entryChunk = generated.find((chunk) => chunk.isEntry);
+  const byName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const entryChunk = chunks.find((chunk) => chunk.isEntry);
   if (!entryChunk) throw new Error('Rollup produced no entry chunk for the server output.');
-  const eager = closure(entryChunk.fileName);
-  const routeTargets = new Set(
-    [...eager].flatMap((fileName) => byName.get(fileName)?.dynamicImports ?? []),
+  const eager = closureOf(byName, entryChunk.fileName);
+  const lazy = chunks.filter((chunk) => !eager.has(chunk));
+
+  const systemjs = await readFile(require.resolve('systemjs/dist/s.min.js'), 'utf8');
+  const loader = await readFile(new URL('packed-loader.js', import.meta.url), 'utf8');
+  const imports = [...builtins].map((id, index) => `import * as builtin${index} from '${id}';`);
+
+  const lines: string[] = [];
+  const sections: Array<{ offset: { line: number; column: number }; map: unknown }> = [];
+  const add = (text: string) => lines.push(...text.split('\n'));
+  add(imports.join('\n'));
+  add(systemjs.replace(SOURCE_MAP_COMMENT, ''));
+  add(`const respond = ${loader.trim().replace(/;$/, '')}({`);
+  add(`entry: ${JSON.stringify(entryChunk.fileName)},`);
+  add(
+    `builtins: {${[...builtins].map((id, index) => `${JSON.stringify(id)}: builtin${index}`).join(', ')}},`,
   );
-  const targets: Record<string, string[]> = {};
-  for (const chunk of generated.filter((item) => item.isDynamicEntry)) {
-    const files = [...closure(chunk.fileName)].filter((fileName) => !eager.has(fileName));
-    if (routeTargets.has(chunk.fileName) && files.length > PARTS_PER_TARGET) {
-      throw new Error(
-        `The server part ${chunk.name} needs ${files.length} parts, more than the budget of ${PARTS_PER_TARGET}.`,
-      );
-    }
-    targets[chunk.fileName] = files;
+  add('inline: {');
+  for (const chunk of eager) {
+    add(`${JSON.stringify(chunk.fileName)}: function () {`);
+    if (chunk.map) sections.push({ offset: { line: lines.length, column: 0 }, map: chunk.map });
+    add(withoutMapComment(chunk.code));
+    add('},');
   }
+  add('},');
+  add(
+    `packed: ${JSON.stringify(Object.fromEntries(lazy.map((chunk) => [chunk.fileName, packed(withoutMapComment(chunk.code))])))},`,
+  );
+  add(`wasm: ${JSON.stringify(wasm.map(packedBytes))},`);
+  add(`wasmOf: ${JSON.stringify(Object.fromEntries(chunks.flatMap(wasmIdsOf)))},`);
+  add('});');
+  add('Bunny.v1.serve(respond);');
 
   return {
-    entry: entryChunk.fileName,
-    eager: [...eager],
-    chunks: generated.map((chunk) => ({
-      fileName: chunk.fileName,
-      code: chunk.code,
-      sha256: createHash('sha256').update(chunk.code).digest('hex'),
-      bytes: Buffer.byteLength(chunk.code),
-    })),
-    targets,
+    code: `${lines.join('\n')}\n`,
+    map: JSON.stringify({ version: 3, file: 'index.js', sections }),
+    wasm: wasm.length > 0,
     builtins: [...builtins].toSorted(),
   };
+}
+
+export function checkScriptSize(bytes: number): 'ok' | 'warn' {
+  if (bytes > SCRIPT_FAIL_BYTES) {
+    throw new Error(
+      `The script is ${(bytes / 1024 / 1024).toFixed(1)} MB, above the 7 MB bunny.net reliably starts.`,
+    );
+  }
+  return bytes > SCRIPT_WARN_BYTES ? 'warn' : 'ok';
 }
 
 function chunksOf({ output }: RollupOutput): OutputChunk[] {
@@ -110,7 +136,7 @@ function closureOf(
   byName: Map<string, OutputChunk>,
   fileName: string,
   seen = new Set<OutputChunk>(),
-) {
+): Set<OutputChunk> {
   const chunk = byName.get(fileName);
   if (!chunk || seen.has(chunk)) return seen;
   seen.add(chunk);
@@ -118,17 +144,54 @@ function closureOf(
   return seen;
 }
 
-function targetsOf(chunks: OutputChunk[]): Set<string | null> {
-  return new Set(
-    chunks.filter((chunk) => chunk.isDynamicEntry).map((chunk) => chunk.facadeModuleId),
-  );
+function withoutMapComment(code: string): string {
+  return code.replace(SOURCE_MAP_COMMENT, '');
 }
 
-export function checkEagerSize(bytes: number): 'ok' | 'warn' {
-  if (bytes > EAGER_FAIL_BYTES) {
-    throw new Error(
-      `The eager script is ${(bytes / 1024 / 1024).toFixed(1)} MB, above the 7 MB bunny.net reliably starts.`,
-    );
+function packed(code: string): string {
+  return packedBytes(Buffer.from(code));
+}
+
+function packedBytes(bytes: Buffer): string {
+  return brotliCompressSync(bytes, {
+    params: {
+      [constants.BROTLI_PARAM_QUALITY]: 11,
+      [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+    },
+  }).toString('base64');
+}
+
+function wasmIdsOf(chunk: OutputChunk): Array<[string, number[]]> {
+  const ids = [...chunk.code.matchAll(WASM_REFERENCE)].map((match) => Number(match[1]));
+  return ids.length > 0 ? [[chunk.fileName, ids]] : [];
+}
+
+function stripServerEntries(code: string, dir: string): string {
+  const call = code.indexOf(`${MANIFEST_CALL}{`);
+  if (call === -1) return code;
+  const start = call + MANIFEST_CALL.length;
+  const end = endOfObject(code, start);
+  const manifest = JSON.parse(code.slice(start, end));
+  if (!manifest.entryModules) return code;
+  manifest.entryModules = Object.fromEntries(
+    Object.entries(manifest.entryModules).filter(
+      ([, file]) => !(typeof file === 'string' && file !== '' && existsSync(join(dir, file))),
+    ),
+  );
+  return code.slice(0, start) + JSON.stringify(manifest) + code.slice(end);
+}
+
+function endOfObject(code: string, start: number): number {
+  let depth = 0;
+  for (let index = start; index < code.length; index++) {
+    const character = code[index];
+    if (character === '"') {
+      for (index++; code[index] !== '"'; index++) if (code[index] === '\\') index++;
+    } else if (character === '{' || character === '[') {
+      depth++;
+    } else if ((character === '}' || character === ']') && --depth === 0) {
+      return index + 1;
+    }
   }
-  return bytes > EAGER_WARN_BYTES ? 'warn' : 'ok';
+  throw new Error('The server manifest literal is not terminated.');
 }
