@@ -76,7 +76,7 @@ export default function bunny({
         const scriptBytes = Buffer.byteLength(output.code);
         if (checkScriptSize(scriptBytes) === 'warn') {
           logger.warn(
-            `The script is ${(scriptBytes / 1024 / 1024).toFixed(1)} MB; above 1 MB, cold starts slow down.`,
+            `The script is ${(scriptBytes / 1024 / 1024).toFixed(1)} MB; above 4 MB, cold starts slow down.`,
           );
         }
         const outDir = fileURLToPath(config.outDir);

@@ -11,7 +11,7 @@ export type BuildLogger = Pick<AstroIntegrationLogger, 'warn' | 'info' | 'debug'
 
 export type Script = { code: string; map: string; wasm: boolean; builtins: string[] };
 
-const SCRIPT_WARN_BYTES = 1024 * 1024;
+const SCRIPT_WARN_BYTES = 4 * 1024 * 1024;
 const SCRIPT_FAIL_BYTES = 7 * 1024 * 1024;
 
 const BUILTINS = new Set(builtinModules);

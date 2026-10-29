@@ -218,8 +218,8 @@ test('Rollup warnings reach the build logger instead of the console', async () =
   assert.match(warnings[0] ?? '', /annotation/);
 });
 
-test('a script up to 1 MB passes, above it warns, and above 7 MB fails', () => {
-  assert.equal(checkScriptSize(900 * 1024), 'ok');
-  assert.equal(checkScriptSize(2 * 1024 * 1024), 'warn');
+test('a script up to 4 MB passes, above it warns, and above 7 MB fails', () => {
+  assert.equal(checkScriptSize(3.5 * 1024 * 1024), 'ok');
+  assert.equal(checkScriptSize(4.5 * 1024 * 1024), 'warn');
   assert.throws(() => checkScriptSize(7.5 * 1024 * 1024), /7 MB/);
 });
