@@ -15,12 +15,13 @@ Work stays inside this repository. Where a milestone needs deploy tooling behavi
 | S1 | Spike, Bunny: steps 2 to 10 and the packed script (done) | S1.1 (parallel to M1 and M2) | M3, M4, M5 |
 | M1 | Request decision, caching and header rules, pure | M0 | M4, M5 |
 | M2 | Astro integration and build output, parts included | M0, L1, L2 | M3 |
-| M3 | The packed script | M2, L2, S1 | M3b, M4, M5 |
+| M3 | The packed script | M2, L2, S1 | M3b, M3c, M4, M5 |
 | M3b | Prism in on-demand routes | M3 | M7 |
+| M3c | Default cache provider and `_headers` Cache-Control | M3 | M7 |
 | M4 | Middleware script type | M1, M3, S1 | M5, M6 |
 | M5 | Standalone script type | M4 | M7 |
 | M6 | Preview | M4 | M7 |
-| M7 | First release | M3b, M5, M6 | reference site migration |
+| M7 | First release | M3b, M3c, M5, M6 | reference site migration |
 | Ref | Migrate the reference site (in its own repository) | M7 | none |
 
 Server code is packed into the one script from M3 on, so there is no post-release split milestone.
@@ -91,6 +92,12 @@ Not run: step 8 (reserved paths answer 404 in both types) and step 9 (a storage 
 - **Done when:** a `test/app` route with `<Prism>` renders on demand from the packed script.
 - **Depends on:** M3.
 
+## M3c: default cache provider and `_headers` Cache-Control
+
+- **Scope:** a bunny.net CDN cache provider registered by default when the project has none (ADR 0005): `Cache-Control` with `s-maxage`, `CDN-Tag`, and `invalidate()` through the purge API with `BUNNY_API_KEY`, with a clear error when the key is missing. `_headers` may set `Cache-Control` on stored files (ADR 0008). Before it ships, a bunny.net check of `s-maxage` with `max-age=0`, `CDN-Tag` on script responses, and purge speed.
+- **Done when:** `routeRules` on an on-demand `test/app` route give the expected headers, `invalidate()` calls the purge API with the right tags against a fake API, `_headers` Cache-Control lands on a stored file, and the bunny.net check is recorded.
+- **Depends on:** M3.
+
 ## M4: middleware script type
 
 - **Scope:** `app`, `scripts/middleware`, the visitor path hand-off, applying `_headers` and `_redirects` to stored files. The reference site's script type, so it comes first.
@@ -125,8 +132,8 @@ Runs in the reference site's repository, after the first release.
 
 ## Deploy tooling, outside this plan
 
-Changes the deploy tool needs are listed here and made in their own track, not from this repository: the bunny-edge-deploy Action's `_headers` and `_redirects` parser has to learn `! Name` (dropped today), `:splat` and `:placeholder` (kept literally) and query conditions (read as literal paths) before static builds match script builds (L2 step 5, ADR 0008). Server code needs no deploy tool change: it ships inside the script (ADR 0007).
+Changes the deploy tool needs are listed here and made in their own track, not from this repository: the bunny-edge-deploy Action's `_headers` and `_redirects` parser has to learn `! Name` (dropped today), `:splat` and `:placeholder` (kept literally) and query conditions (read as literal paths) before static builds match script builds (L2 step 5, ADR 0008). Server code needs no deploy tool change: it ships inside the script (ADR 0007). The deploy tool sets `BUNNY_API_KEY` as a script secret, and purges only after a successful publish or rollback, in the order upload, publish, smoke test, purge (ADR 0004).
 
 ## Later, not planned yet
 
-Each starts with its own spike: a Bunny Database session driver, a Bunny cache provider with tag purges, a Bunny Optimizer image service, an optional file table that skips the storage miss for catch-all routes.
+Each starts with its own spike: a Bunny Database session driver, a Bunny Optimizer image service, Astro's per-page `Cache-Control` on prerendered pages and `routeRules` headers in `_headers` for static builds, an optional file table that skips the storage miss for catch-all routes.
