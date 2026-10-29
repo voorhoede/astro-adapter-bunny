@@ -3,7 +3,8 @@
 // <out>/split.js loads parts at runtime (PART_ZONE + PART_SECRET through a pull zone, or STORAGE_BASE + STORAGE_KEY),
 // <out>/one.js registers the named parts inside the script, and <out>/all.js registers every part in <parts dir>,
 // the named ones first, up to the cap.
-// Each answers JSON with timings; ?route=<path> picks the route (without it, 404), ?fresh=1 uses a new loader in the same isolate,
+// Each answers JSON with timings; ?route=<path> picks the route (without it, 404),
+// ?fresh=1 uses a new loader in the same isolate,
 // ?bust=<n> adds a query to every part URL so the pull zone misses, and on split.js ?probe=<part>[,<part>...]&bust=<n>
 // only fetches those parts concurrently through the pull zone and reports timings and the CDN's storage server.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
