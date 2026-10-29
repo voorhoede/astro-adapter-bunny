@@ -80,10 +80,10 @@ Not run: step 8 (reserved paths answer 404 in both types) and step 9 (a storage 
 
 ## M3: the packed script
 
-- **Scope:** `build/bundle` assembling `dist/index.js` from `s.js`, the eager chunks and every lazy chunk brotli-compressed and base64-encoded in string literals; the Shiki wasm rewrite, skipped when the pattern is missing; stripping server files from `entryModules`; minify with Rolldown's minifier (`keepNames`, `legalComments: 'inline'`) and the source map at `dist/index.js.map`; the size check on the whole script (warn above 1 MB, fail above 7 MB); dropping `assets.reserved` from the manifest. `packed-loader` with the loader hook (`Uint8Array.fromBase64`, `DecompressionStream('brotli')`, indirect `eval`). Until M4, the script hands every request to the server entry's `fetch` (ADR 0007).
+- **Scope:** `build/bundle` assembling `dist/index.js` from `s.js`, the eager chunks and every lazy chunk brotli-compressed and base64-encoded in string literals; the Shiki wasm rewrite, skipped when the pattern is missing; stripping server files from `entryModules`; minify with Rolldown's minifier (`keepNames`, `legalComments: 'inline'`) and the source map at `dist/index.js.map`; the size check on the whole script (warn above 4 MB, fail above 7 MB); dropping `assets.reserved` from the manifest. `packed-loader` with the loader hook (`Uint8Array.fromBase64`, `DecompressionStream('brotli')`, indirect `eval`). Until M4, the script hands every request to the server entry's `fetch` (ADR 0007).
 - **Done when:** under the local harness, `test/app`'s `/code` renders from the packed script with the same HTML as unpacked; importing the script without the deploy global does not throw and unpacks nothing; `dist/client` holds no server code; the build fails on a refused builtin and on a script above 7 MB; a build without Shiki's wasm pattern still renders.
 - **Also:** drop Rollup's 32 kB merge and its guard from `build/bundle`, and check on `/code` that unmerged chunks cost no unpacking time.
-- **Open, measured here:** where the packed script stops starting (expected near 7 MB of script, about 25 MB of source); a build the size of the reference site; whether a request can fail on subrequests.
+- **Measured:** [M3 bloat spike](spikes/2026-10-29-m3-bloat.md); the results are in ADR 0007. CommonJS dependencies that `require` a builtin work from the script.
 - **Depends on:** M2, L2, S1.
 
 ## M3b: Prism in on-demand routes

@@ -1,0 +1,8 @@
+---
+import Base from '../layouts/Base.astro';
+import { icon, iconNames } from '../lib/icons.ts';
+export const prerender = false;
+const page = Number(Astro.url.searchParams.get('page') ?? 0);
+const shown = iconNames.slice(page * 200, page * 200 + 200);
+---
+<Base title="Icons" icon="shape"><p>{iconNames.length} icons</p><ul>{shown.map((n) => <li><Fragment set:html={icon(n)} />{n}</li>)}</ul></Base>

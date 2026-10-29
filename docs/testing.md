@@ -288,7 +288,7 @@ Every Must from `docs/requirements.md`. Layers: **U** unit, **B** build, **L** l
 | `/code` renders from the packed script in both script types, with the same HTML as an unpacked build | L, Live |
 | Importing the script unpacks no chunk; the first request unpacks only the chunks its route imports | L |
 | A warm request unpacks nothing | L |
-| The build fails on a refused builtin and on a script above 7 MB, and warns above 1 MB | B |
+| The build fails on a refused builtin and on a script above 7 MB, and warns above 4 MB | B |
 
 ### Should, planned coverage
 
@@ -323,7 +323,7 @@ R-BUILD-5 and G-8 (`oversize`), R-HDR-7 (unit rules once decided), R-HDR-8 (live
 
 | Measurement | How | Where and when |
 | --- | --- | --- |
-| Script size | Raw and gzip bytes of `dist/index.js` per build, its eager code and its packed table | Every PR, compared with `main`; warn above 1 MB, fail above 7 MB (ADR 0007) |
+| Script size | Raw and gzip bytes of `dist/index.js` per build, its eager code and its packed table | Every PR, compared with `main`; warn above 4 MB, fail above 7 MB (ADR 0007) |
 | Unpacking | Unpack time per route on a cold request | Every PR, locally; on Bunny in the measurement run |
 | Startup probe | Deno import time of the script alone, `Bunny.v1` stubbed | Every PR. A signal for top-level work only: a local import is no timing match for the edge (`F:134`) |
 | Cold start on Bunny | First byte on `/env` (small) and `/code` (Shiki) per script type, from ten cities after 30 min idle, then again at once | Measurement run. A cold-path measurement in the prototype showed low-traffic requests are nearly always cold, so the second round is not assumed warm |
@@ -335,7 +335,7 @@ Cities follow the prototype's cold-path measurement: Amsterdam, Frankfurt, Londo
 
 ## Open questions
 
-1. **Size thresholds.** Settled in ADR 0007 for the whole script: warn above 1 MB raw, fail above 7 MB raw (S1 step 2). Where a packed script stops starting is open for M3.
+1. **Size thresholds.** Settled in ADR 0007 for the whole script: warn above 4 MB raw, fail above 7 MB raw (S1 step 2). M3 measured where a packed script stops: it started up to 8.35 MB and was refused from 8.68 MB.
 2. **Subrequests.** No code is fetched any more. No runtime guard until a request is shown to fail on subrequests (M3).
 3. **Test account.** The API key is account-wide (`F:210`), so live tests need a Bunny account with nothing else in it. Who owns it, and who pays?
 4. **Live triggers.** Manual, weekly and release gate as proposed, or also a pull request label?

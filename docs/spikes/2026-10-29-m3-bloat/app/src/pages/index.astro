@@ -1,0 +1,16 @@
+---
+import { getCollection } from 'astro:content';
+import { formatDistanceStrict } from 'date-fns';
+import { groupBy } from 'lodash-es';
+import Base from '../layouts/Base.astro';
+export const prerender = false;
+const posts = (await getCollection('blog')).toSorted((a, b) => +b.data.date - +a.data.date);
+const byTag = groupBy(posts.flatMap((p) => p.data.tags.map((tag) => ({ tag, p }))), 'tag');
+const now = new Date(Date.UTC(2026, 9, 29));
+---
+<Base title="Home">
+  <h1>Home</h1>
+  <ul>{posts.slice(0, 20).map((p) => <li><a href={`/blog/${p.id}`}>{p.data.title}</a> {formatDistanceStrict(p.data.date, now)} ago</li>)}</ul>
+  <p>{Object.keys(byTag).length} tags</p>
+  <ul>{Array.from({ length: 30 }, (_, i) => <li><a href={`/p/page-${String(i).padStart(3, '0')}`}>page {i}</a></li>)}</ul>
+</Base>

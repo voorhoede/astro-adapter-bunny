@@ -1,0 +1,19 @@
+---
+import { Code } from 'astro:components';
+import Base from '../../layouts/Base.astro';
+export const prerender = false;
+const samples = {
+  ts: 'export async function load(id: string): Promise<Item | undefined> {\n  return items.get(id);\n}',
+  css: '.card { display: grid; gap: 1rem; color: oklch(60% 0.1 200); }',
+  html: '<dialog id="d"><form method="dialog"><button>Close</button></form></dialog>',
+  json: '{ "name": "site", "private": true, "scripts": { "build": "astro build" } }',
+  python: 'def total(items):\n    return sum(i.price for i in items if i.active)',
+  rust: 'fn main() { let v: Vec<u32> = (1..10).collect(); println!("{:?}", v); }',
+  yaml: 'jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: [{ uses: actions/checkout@v4 }]',
+  sql: 'SELECT id, title FROM posts WHERE published_at > now() - interval \'7 days\';',
+};
+const lang = Astro.params.lang ?? 'ts';
+const shown = lang === 'all' ? Object.entries(samples) : Object.entries(samples).filter(([l]) => l === lang);
+if (shown.length === 0) return new Response('not found', { status: 404 });
+---
+<Base title={`Code ${lang}`} icon="code-tags">{shown.map(([l, code]) => <section><h2>{l}</h2><Code code={code} lang={l as any} /></section>)}</Base>

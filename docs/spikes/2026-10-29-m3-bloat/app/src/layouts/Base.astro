@@ -1,0 +1,21 @@
+---
+import { format } from 'date-fns';
+import { de, enUS, nl } from 'date-fns/locale';
+import { icon } from '../lib/icons.ts';
+import { t, translationKeys } from '../lib/i18n.ts';
+const { title, icon: iconName = 'home' } = Astro.props;
+const lng = Astro.url.searchParams.get('lng') ?? 'en';
+const locale = { de, en: enUS, nl }[lng] ?? enUS;
+const built = new Date(Date.UTC(2026, 9, 29, 12));
+const nav = ['home', 'post', 'code-tags', 'shape', 'form-select'];
+---
+<html lang={lng}>
+  <head><meta charset="utf-8" /><title>{title}</title></head>
+  <body>
+    <header>
+      <nav>{nav.map((n, i) => <a href={['/', '/blog', '/code/all', '/icons', '/form'][i]}><Fragment set:html={icon(n)} />{t(lng, translationKeys[i])}</a>)}</nav>
+    </header>
+    <main><Fragment set:html={icon(iconName, 32)} /><slot /></main>
+    <footer>{format(built, 'PPPP', { locale })} · {t(lng, translationKeys[10])}</footer>
+  </body>
+</html>

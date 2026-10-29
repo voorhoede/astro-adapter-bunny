@@ -1,0 +1,7 @@
+---
+import Base from '../layouts/Base.astro';
+import { renderUserMarkdown } from '../gen/markdown.ts';
+export const prerender = false;
+const source = Astro.url.searchParams.get('src') ?? '# Hello\n\nSome *markdown* with <script>alert(1)</script> and [a link](https://example.com).\n\n- one\n- two';
+---
+<Base title="Markdown"><Fragment set:html={renderUserMarkdown(source)} /></Base>

@@ -184,7 +184,7 @@ This adapter is written without reading any other bunny.net adapter.
 
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
-| Packed script outgrows what bunny.net starts **[open: M3]** | Every request 400 or slow cold starts | Size check on the whole script: warn above 1 MB, fail above 7 MB (ADR 0007); about 25 MB of source expected to fit, not measured; a build the size of the reference site is measured in M3 |
+| Packed script outgrows what bunny.net starts | Publish refused or every request 400 | Size check on the whole script: warn above 4 MB, fail above 7 MB, measured in M3 (ADR 0007); a heavy site of 36.2 MB of server code packed into 8.35 MB and started |
 | A request fails on subrequests **[open: M3]** | A cold route fails | No code is fetched any more; S1 saw 400 sequential fetches in one request succeed; a guard only if a request can fail |
 | Shiki changes how it inlines its wasm | Shiki decodes 622 kB of base64 per cold request again, about 48 to 68 ms on `/code` (S1 pack tune, derived) | The build skips the rewrite when the pattern is missing, so the site still renders, only slower |
 | `<Prism>` in an on-demand route fails at request time | prismjs loads its languages through a dynamic `require` the bundler cannot see | Its own pull request: a Vite plugin that makes the language loads visible to the bundler (plan) |

@@ -1,0 +1,5 @@
+---
+import { icon } from '../lib/icons.ts';
+const { kind } = Astro.props;
+---
+<aside class={`callout callout-${kind}`}><Fragment set:html={icon(kind === 'note' ? 'information' : 'alert')} /><slot /></aside>

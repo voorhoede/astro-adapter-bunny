@@ -1,0 +1,11 @@
+---
+import { z } from 'zod';
+import Base from '../layouts/Base.astro';
+export const prerender = false;
+const Signup = z.object({ email: z.email(), name: z.string().min(2).max(80), age: z.coerce.number().int().min(13).optional() });
+const result = Signup.safeParse(Object.fromEntries(Astro.url.searchParams));
+---
+<Base title="Form" icon="form-select">
+  <form><input name="email" /><input name="name" /><input name="age" /><button>Send</button></form>
+  {result.success ? <p>ok {result.data.name}</p> : <ul>{result.error.issues.map((i) => <li>{i.path.join('.')}: {i.message}</li>)}</ul>}
+</Base>

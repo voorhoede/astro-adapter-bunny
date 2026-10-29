@@ -1,0 +1,8 @@
+node_modules
+dist
+.astro
+.bunny
+out
+app/src/gen
+app/src/pages/p
+app/src/content/blog

@@ -1,0 +1,22 @@
+{
+  "name": "aab-spike-bloat-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "node gen.mjs",
+    "build": "astro build"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "8.1.2",
+    "@iconify-json/mdi": "1.2.3",
+    "@iconify/utils": "3.1.7",
+    "astro": "7.4.2",
+    "date-fns": "4.4.0",
+    "i18next": "26.5.11",
+    "lodash-es": "4.18.1",
+    "marked": "18.1.2",
+    "sanitize-html": "2.18.1",
+    "xss": "^1.0.17",
+    "zod": "4.6.7"
+  }
+}

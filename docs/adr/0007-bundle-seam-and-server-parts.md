@@ -1,6 +1,6 @@
 ---
-status: accepted (one packed script, Rollup and SystemJS `s.js`, the loader hook, the Shiki wasm rewrite, minify, the builtin and script size checks); open (where a packed script stops starting, a build the size of the reference site, whether a request can fail on subrequests)
-date: 2026-10-28
+status: accepted (one packed script, Rollup and SystemJS `s.js`, the loader hook, the Shiki wasm rewrite, minify, the builtin and script size checks, CommonJS `require` of builtins); open (what makes bunny.net refuse a script between 8.4 and 9.3 MB)
+date: 2026-10-28, updated 2026-10-29
 ---
 
 # Server code in one packed script, loaded by SystemJS behind our own module
@@ -42,8 +42,9 @@ One script file holds all server code, and nothing is fetched at runtime for cod
 - **Manifest.** `entryModules` entries that point at server files are stripped from Astro's server manifest.
 - **Minify.** Every chunk is minified with Rolldown's own minifier (`minify` from `rolldown/utils`, oxc inside), with `keepNames` and `legalComments: 'inline'`. Legal comments survive only inside packed string data; bunny.net drops comments in the script's own source. No option turns minification off for now.
 - **Source map.** Written next to the script as `dist/index.js.map`, outside `dist/client`, so it is not deployed.
+- **CommonJS `require`.** Rolldown turns a CommonJS dependency's `require` of a builtin into `createRequire(import.meta.url)`, which throws under the loader, since a packed chunk has no file URL. `build/bundle` replaces it with the script's own `require`, which only knows the builtins the script imports statically: every `__require("name")` with a literal name is checked at build like an `import`, and a computed name that is not a builtin throws at runtime. Without this, one such dependency (postcss, through `sanitize-html`) made every route answer 500, because the runtime chunk is shared (M3 bloat spike). `node:fs`, `node:url` and `node:path` from postcss rendered on bunny.net (M3, one live check).
 - **Builtins.** `build/bundle` refuses `node:child_process`, `node:vm`, `node:worker_threads`, `node:constants` and `node:path/win32`: each made the script answer 400 on every request while the publish was accepted (S1 step 2, measured).
-- **Script size.** Checked on the whole script: warn above 1 MB, fail above 7 MB (S1 step 2). A packed script carries about 3.7 times more code per MB than plain code (S1 packed, derived), so 7 MB is expected near 25 MB of source; not measured.
+- **Script size.** Checked on the whole script: warn above 4 MB, fail above 7 MB (S1 step 2, M3 bloat spike). At 1 MB the warning fired on every realistic site; at 4.35 MB a cold `/` still took 273 to 417 ms. A packed script carries about 3.7 times more code per MB than plain code (S1 packed, derived), so 7 MB is expected near 25 MB of source; not measured.
 - **Data stays in string literals.** bunny.net reprints the script and drops every comment, `//# sourceURL` and license comments included (S1 pack tune).
 - **`/_bunny/` stays reserved** in `routing` (ADR 0002). No file lives there any more; keeping it costs nothing and keeps the namespace for the adapter.
 
@@ -54,11 +55,16 @@ Measured on bunny.net with the L2 app (S1 pack tune variant 6, S1 minify v6r):
 - Minify gained about 11 ms on `/` (pooled, p 0.002), nearly all in startup; on `/code` the gain is not resolved at that sample size (S1 minify).
 - `Uint8Array.fromBase64`, `DecompressionStream` with gzip and brotli, and `node:zlib` exist on bunny.net. ICU is already set up in a fresh isolate (S1 pack tune).
 
-### Open, for M3
+### Measured in M3
 
-- **Where a packed script stops starting.** Expected near the 7 MB script limit, about 25 MB of source at the measured ratio; not measured.
-- **A build the size of the reference site.** Only the L2 app was measured.
-- **Whether a request can fail on subrequests.** No code is fetched any more, but S1 measured 400 sequential fetches in one request without hitting the documented 50 ([note](../spikes/2026-10-28-s1.md)). A guard is added only if a request can fail.
+From the M3 bloat spike ([note](../spikes/2026-10-29-m3-bloat.md)), one heavy app of 437 on-demand routes built at growing sizes:
+
+- **Where a packed script stops.** Scripts up to 8.35 MB (8,348,612 bytes) started and answered. At 8.68 and 9.02 MB the publish failed with an API 500, and from 9.56 MB on the publish was accepted but every request got an immediate 400. A trivial script padded with random base64 showed the same window, while repeated characters at 8.7 MB published, so the refusal depends on content, not only on size. The limit is the platform, not startup time.
+- **The fail threshold stays at 7 MB.** It keeps about 1.3 MB below the largest script that started, and the refusal near 8.4 MB depends on content, so a higher threshold would have no margin.
+- **A heavy site.** 18.9 to 36.2 MB of server code packed into 4.35 to 8.35 MB of script, about 4.1 to 4.35 times smaller, against the 3.7 assumed above. Every route gave the same HTML as Node. Cold `/` took 273 to 417 ms at 4.35 MB and 376 to 505 ms at 8.35 MB (New York, Frankfurt, Singapore medians, 5 to 12 cold samples per cell), about 19 to 56 ms per MB.
+- **Subrequests.** Up to 3,000 sequential and 1,000 parallel fetches in one request all answered 200. No guard is added.
+- **Memory.** Locally, 51 to 162 MB of heap after visiting every route, about 11 MB per MB of script. Not measured on bunny.net.
+- **The 32 kB merge.** On the test app, merging cuts 318 chunks to 312, and cold `/code` took 68.8 ms unmerged against 68.4 ms merged (median of 30 cold Deno processes each, local), so dropping it costs nothing measurable.
 
 ### Security (accepted)
 
