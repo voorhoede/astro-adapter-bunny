@@ -36,7 +36,7 @@ How the adapter is tested: which layers exist, what each one proves, which app a
   - **Header rules.** `_astro/` immutable, page cache policy for other stored files, `private, no-store` default for rendered responses, any 500 never cacheable, and no response ever leaving without `Cache-Control` (bunny.md, "No `Cache-Control` at all"). The two R-HDR-2 exceptions: a rendered response with `Set-Cookie`, or with a `Vary` other than `accept-encoding`, becomes `private, no-store` and logs the route pattern only.
   - **`_headers` and `_redirects` rules** (ADR 0008). Matching (splats, placeholders), several blocks combining, `! Name` detaching, statuses, status 200 to another stored file, query handling; Astro's per-page headers beating `_headers`; `_headers` never setting `Cache-Control`; nothing applied to rendered responses; a `_redirects` rule not applying to a path an on-demand route claims. Expected values come from Cloudflare's docs, cited per row.
   - **Request URL rebuild** from `cdn-host` and `https`, never `x-forwarded-host`, since `request.url` in middleware is the storage origin (`F:64`).
-  - **Build manifest.** `.bunny/build.json` from build facts, including `assets.reserved` and `requires.env` derived from an env schema with secret, optional, defaulted and public fields (only server secrets listed; storage variables required in both types).
+  - **Build manifest.** `.bunny/build.json` from build facts, including `requires.env` derived from an env schema with secret, optional, defaulted and public fields (only server secrets listed; storage variables required in both types).
   - **Env accessor.** Reads at request time, falls back to compiled `envField` defaults (R-ENV-3).
 - Assumption about the design: the decision core receives the route match as data (or as a function argument), so it needs no Astro manifest. If the design calls `app.match()` inside it, route collision cases such as R-ROUTE-2 move to the build and runtime layers.
 
@@ -44,16 +44,16 @@ How the adapter is tested: which layers exist, what each one proves, which app a
 
 - Each fixture is built with Astro's programmatic `build()` and inline config overrides, the pattern official adapters use with one fixture source and several configs [V: `withastro/astro` `packages/integrations/node/test/`].
 - Checks per build:
-  - Layout: `dist/index.js` plus a client directory with parts under `_bunny/server/` (R-BUILD-2); the script imports nothing relative and loads parts only through its storage hook.
-  - The script imports on its own: copied alone into an empty temp directory and imported under Deno with `globalThis.Bunny` stubbed and **no** `__BUNNY_DEPLOY__`. It must not throw, must register its handler and must fetch no part. This doubles as the startup probe.
-  - Parts: every part's hash in the import map matches its file; parts per directly imported target stay within the budget of ADR 0007; the eager script is under the fail threshold.
+  - Layout: `dist/index.js` and its source map next to it, plus a client directory with no server code in it (R-BUILD-2); the script imports nothing relative and fetches no code (ADR 0007).
+  - The script imports on its own: copied alone into an empty temp directory and imported under Deno with `globalThis.Bunny` stubbed and **no** `__BUNNY_DEPLOY__`. It must not throw, must register its handler and must unpack no chunk. This doubles as the startup probe.
+  - Packing: every lazy chunk is in the packed table and decodes to its minified code; the Shiki wasm rewrite applies when the pattern is present and is skipped without failing when it is not; `entryModules` lists no server file; the whole script is under the fail threshold (ADR 0007).
   - Headers: `staticHeaders` is on only when a script is emitted; the parsed `_headers` and `_redirects` table matches the test app's files; a syntax error fails the build with the line number.
-  - `sharp` appears in neither the script nor any part (ADR 0006).
+  - `sharp` appears nowhere in the script, packed chunks included (ADR 0006).
   - `node:` imports are only those that work on Bunny (`F:175`, `F:176`).
   - `.bunny/build.json` matches the documented contract: fields, `script.bytes` equal to the file size, `requires.pullZone` values (R-BUILD-1).
-  - Secrets: the build runs with known fake secret values in its environment, then the script, the parts, the client directory and the manifest are searched for them (R-ENV-2). Same search for the build host name and `localhost` (R-BUILD-6).
+  - Secrets: the build runs with known fake secret values in its environment, then the script with its packed chunks decoded, the source map, the client directory and the manifest are searched for them (R-ENV-2). Same search for the build host name and `localhost` (R-BUILD-6).
   - Sessions off: no session runtime in the script and no session storage in `requires` (R-ENV-4).
-  - Size: raw and gzip bytes of the eager script and of each part, written to a JSON report (see [Measurements](#measurements-to-track)).
+  - Size: raw and gzip bytes of the script, of its eager code and of its packed table, written to a JSON report (see [Measurements](#measurements-to-track)).
 
 ### 3. Local runtime
 
@@ -61,10 +61,9 @@ A harness in `test/harness/`, around 200 to 300 lines of our own [E], runs a bui
 
 - **Runtime.** Deno, pinned to the version Bunny reports (2.7.12 in `F:174`). The harness stubs `globalThis.Bunny.v1` (`serve`, `registerMiddlewares`, `waitUntil`), which is what the SDK calls on Bunny (`F:170`), so it works whether or not the bundle uses the SDK.
 - **Deploy line.** It prepends `globalThis.__BUNNY_DEPLOY__ = { id, assetPrefix: "deploys/<id>", ... }` like both deploy tools do (R-BUILD-3), and can leave it out for the fail-closed check.
-- **Fake storage.** An HTTP server serving the client directory under `deploys/<id>/`, requiring `AccessKey` for API reads (parts and error pages in both types, files in standalone) and sending a weak `etag` (`F:42`). Through the pull zone emulator it sets `content-type` from the extension (`F:155`). On Storage API reads it sends `application/octet-stream` until S1 step 6 says otherwise, so a test fails if the script relies on storage for the type.
-- **Request log.** The harness logs every storage read. A check fails when one request reads more than one stored file; part reads are counted separately per route and compared with the budget.
-- **Cache API stub.** `caches.default` and `caches.open` with `match`, `put`, `delete`, as Bunny documents them, empty per isolate and clearable, so the part transport's hit, miss and fallback paths run locally. Eviction timing is live-only (S1 step 3a).
-- **Fault injection.** The fake storage can fail the next read of a named part, delay it, or serve altered bytes, for the split loading tests.
+- **Fake storage.** An HTTP server serving the client directory under `deploys/<id>/`, requiring `AccessKey` for API reads (error pages in both types, files in standalone) and sending a weak `etag` (`F:42`). Through the pull zone emulator it sets `content-type` from the extension (`F:155`). On Storage API reads it sends `application/octet-stream` until S1 step 6 says otherwise, so a test fails if the script relies on storage for the type.
+- **Request log.** The harness logs every storage read. A check fails when one request reads more than one stored file.
+- **Fault injection.** The fake storage can fail the next read of a named file or delay it.
 - **Pull zone emulator** (middleware). Each rule cites the fact it copies:
   - `onOriginRequest` gets `request.url` as `http://storage.bunnycdn.com:9000/...`, the public host in `host` and `cdn-host`, and `x-forwarded-proto: https` (`F:64`).
   - Added headers: `x-real-ip`, `x-forwarded-for`, `cdn-requestcountrycode`, `cdn-requestid` (bunny.md, "Request headers Bunny adds").
@@ -128,7 +127,7 @@ test/
     routing/                   tiny site built with several inline configs
     static-only/               no on-demand routes at all, with _headers and _redirects
     static-islands/            prerendered pages plus one server:defer
-    oversize/                  a generated 11 MB module, as a part and forced eager
+    oversize/                  a generated 11 MB module, packed and forced eager
   live/                        deploy, rollback and measurement scripts
 docs/measurements/             results of measurement runs
 ```
@@ -145,7 +144,7 @@ docs/measurements/             results of measurement runs
 | `/about` and `/about/` | prerendered | Directory requests resolve to `about/index.html` under Astro defaults | R-ROUTE-8 |
 | `/robots.txt` | public file | A public file gets `_headers` and the page cache policy, not the immutable one | R-HDR-1, R-HDR-3 |
 | `/legacy`, `/legacy/*` | `_redirects` | A 301 and a splat redirect for paths no route claims; a 200 rule serving another stored file | R-ROUTE-7, ADR 0008 |
-| `/_headers`, `/_redirects`, `/_bunny/server/<part>` | none | Answer 404; a part is never served to a visitor | ADR 0007, ADR 0008 |
+| `/_headers`, `/_redirects`, `/_bunny/` and any path under it | none | Answer 404 | ADR 0002, ADR 0008 |
 | `/sitemap-index.xml`, `/sitemap-0.xml` | written by `@astrojs/sitemap` after the adapter | A file in storage wins over the `[locale]` catch-all | R-ROUTE-2 |
 | `/service-worker.js` | written by a local integration in `astro:build:done`, registered after the adapter | Same, for a file Astro never knew about | R-ROUTE-2 |
 | `/[locale]/` | on demand | `en` and `nl` render; anything else rewrites to `/404/?locale=...` and keeps 404 | R-ROUTE-4, R-ROUTE-5 |
@@ -164,7 +163,7 @@ docs/measurements/             results of measurement runs
 | `/env` | on demand | Prints a fake runtime secret, an optional one, and two `envField` defaults absent at runtime | R-ENV-1, R-ENV-3, R-ENV-5 |
 | `/form` | on demand, POST | Same-origin POST accepted, cross-site POST refused with 403, in both script types | Upcoming reference site form need, `F:64` |
 | `/island` | prerendered page with `server:defer` | The island URL in the HTML answers 200 from `/_server-islands/...` | G-5 (Should) |
-| `/code` | on demand | Astro `<Code>` (Shiki), loaded as server parts; the page the per-route budget and cold loads are measured against | R-BUILD-5, measurements |
+| `/code` | on demand | Astro `<Code>` (Shiki), unpacked from the script on first use; the page cold loads are measured against | R-BUILD-5, measurements |
 | `/boom` | on demand | A thrown error gives Astro's 500 page with `private, no-store`, not Bunny's empty 500; a prerendered `500.html` read through the error hook is never cacheable either | R-HDR-4 |
 | `/old`, `/moved`, `/blog-old/[slug]` | `redirects` config | Real 301 and 302 with parameters, not meta-refresh | R-ROUTE-7 |
 | `/deploys/<id>/robots.txt` | none | Answers 404; storage layout unreachable | R-TYPE-2 |
@@ -179,7 +178,7 @@ Config of the full app: `security.csp` on, `session: false`, a no-op image servi
 | `routing` | `base: '/docs'` with `trailingSlash` `always`, `never`, `ignore`; `build.format: 'file'` with `never`; both script types | Non-default routing config behaves as Astro documents, for stored files and rendered routes | G-3, R-ROUTE-8 |
 | `static-only` | no on-demand routes, with `_headers`, `_redirects` and `security.csp` | No script, `kind: "static"`, the CSP still a `<meta>` tag (`staticHeaders` off), both files copied unchanged into `dist/client`, a warning when a variant has more than 50 rules; Astro's own preview serves it | R-ROUTE-1, ADR 0003 |
 | `static-islands` | only prerendered pages plus one `server:defer` | Gets a script, because Astro emits a server entry although it reports `buildOutput: "static"` (L1 step 1) | G-5, ADR 0003 |
-| `oversize` | a generated module of about 11 MB behind one on-demand route | The build succeeds with it as a part; a variant that pulls it into the eager script fails the build [E: L2 decides how to force it eager] | R-BUILD-5, G-8 |
+| `oversize` | a generated module of about 11 MB behind one on-demand route | The build succeeds with it packed when the whole script stays under 7 MB; a variant that pulls it into the eager code fails the size check [E: how to force it eager is decided in M3] | R-BUILD-5, G-8 |
 
 Later, with their Should requirements: an `i18n` fixture for Astro's own `i18n` routing (it cannot share a build with the full app's hand-rolled `[locale]` routes), and a `sessions` fixture once a driver exists.
 
@@ -203,9 +202,9 @@ Every Must from `docs/requirements.md`. Layers: **U** unit, **B** build, **L** l
 | ID | Check | Layers |
 | --- | --- | --- |
 | R-BUILD-1 | `.bunny/build.json` fields and values per build; `script.bytes` equals file size | U, B |
-| R-BUILD-2 | `dist/index.js` importing nothing relative; parts under `dist/client/_bunny/server/`; client files in their own directory | B |
+| R-BUILD-2 | `dist/index.js` importing nothing relative and holding all server code; client files in their own directory | B |
 | R-BUILD-3 | Harness prepends the deploy line with a prefix; stored files load from that prefix; a second prefix serves a second build | L, Live |
-| R-BUILD-4 | Both types read parts and error pages, and standalone reads files, with `AccessKey` from `BUNNY_STORAGE_*`; a wrong key answers 500 and logs once per isolate | L, Live |
+| R-BUILD-4 | Both types read error pages, and standalone reads files, with `AccessKey` from `BUNNY_STORAGE_*`; a wrong key answers 500 and logs once per isolate | L, Live |
 | R-BUILD-3, fail closed | Script imported without the deploy global does not throw; a request answers `private, no-store` 500 with one log line and no storage read | B, L |
 | R-BUILD-6 | No host name, `localhost` or secret in the output; one build served under two hosts and two prefixes | B, L |
 
@@ -282,17 +281,14 @@ Every Must from `docs/requirements.md`. Layers: **U** unit, **B** build, **L** l
 | No new third-party processors | Harness fails on any outbound host other than storage and the test upstream | L |
 | No personal data | Harness fails when a cookie value, client IP or form field appears in script output | L |
 
-### Server parts (ADR 0007)
+### Packed script (ADR 0007)
 
 | Check | Layers |
 | --- | --- |
-| `/code` renders from parts in both script types | L, Live |
-| No part is fetched at import; the first request loads only its route's parts | L |
-| A part fetch that fails once: that request answers 500, the next request retries and renders | L |
-| Two concurrent first requests needing one part cause one fetch | L |
-| A part with altered bytes answers `private, no-store` 500 and is not evaluated | L |
-| Part reads per route stay within the budget | B, L |
-| A visitor requesting a part path gets 404 and nothing is cached | L, Live |
+| `/code` renders from the packed script in both script types, with the same HTML as an unpacked build | L, Live |
+| Importing the script unpacks no chunk; the first request unpacks only the chunks its route imports | L |
+| A warm request unpacks nothing | L |
+| The build fails on a refused builtin and on a script above 7 MB, and warns above 1 MB | B |
 
 ### Should, planned coverage
 
@@ -327,11 +323,10 @@ R-BUILD-5 and G-8 (`oversize`), R-HDR-7 (unit rules once decided), R-HDR-8 (live
 
 | Measurement | How | Where and when |
 | --- | --- | --- |
-| Script size, eager | Raw and gzip bytes of `dist/index.js` per build | Every PR, compared with `main`; warn above 1 MB, fail above 7 MB (proposed, ADR 0007) |
-| Parts | Largest part, total, files reachable per route | Every PR, compared with `main` and the budget |
+| Script size | Raw and gzip bytes of `dist/index.js` per build, its eager code and its packed table | Every PR, compared with `main`; warn above 1 MB, fail above 7 MB (ADR 0007) |
+| Unpacking | Unpack time per route on a cold request | Every PR, locally; on Bunny in the measurement run |
 | Startup probe | Deno import time of the script alone, `Bunny.v1` stubbed | Every PR. A signal for top-level work only: a local import is no timing match for the edge (`F:134`) |
-| Cold start on Bunny | First byte on `/env` (small) and `/code` (Shiki) per script type, from ten cities after 30 min idle, then again at once; a small app split against one module once (S1 step 3c) | Measurement run. A cold-path measurement in the prototype showed low-traffic requests are nearly always cold, so the second round is not assumed warm |
-| Part hashing | SHA-256 time per MB, locally (L2) and on Bunny (S1) | Once, then when parts grow |
+| Cold start on Bunny | First byte on `/env` (small) and `/code` (Shiki) per script type, from ten cities after 30 min idle, then again at once | Measurement run. A cold-path measurement in the prototype showed low-traffic requests are nearly always cold, so the second round is not assumed warm |
 | Static miss latency per script type | First byte on files uploaded fresh for the run (guaranteed misses without a purge), from ten cities | Measurement run. Compare with `F:55` to `F:63` (New York: about 420 ms standalone, 85 ms middleware) |
 | HTML hit vs miss | First byte on `/` and `/about`, first and second request | Measurement run; feeds requirements question 2 (an open performance issue on the reference site) |
 | Conditional requests | Repeat with `If-None-Match`, status and first byte | Measurement run; decides whether R-HDR-8 becomes Must |
@@ -340,8 +335,8 @@ Cities follow the prototype's cold-path measurement: Amsterdam, Frankfurt, Londo
 
 ## Open questions
 
-1. **Size thresholds.** Proposed for the eager script: warn above 1 MB raw (2 MB of code already cost 460 to 520 ms cold, `F:168`), fail above 7 MB raw (under the lowest failure any source saw). Confirm or set others.
-2. **Per-route budget.** Settled in ADR 0007 from L2: at most 8 parts per directly imported target at build. No runtime guard until a request is shown to fail on subrequests.
+1. **Size thresholds.** Settled in ADR 0007 for the whole script: warn above 1 MB raw, fail above 7 MB raw (S1 step 2). Where a packed script stops starting is open for M3.
+2. **Subrequests.** No code is fetched any more. No runtime guard until a request is shown to fail on subrequests (M3).
 3. **Test account.** The API key is account-wide (`F:210`), so live tests need a Bunny account with nothing else in it. Who owns it, and who pays?
 4. **Live triggers.** Manual, weekly and release gate as proposed, or also a pull request label?
 5. **Live deploy path.** bunny-edge-deploy (tests `.bunny/build.json` end to end with a real reader), the Bunny CLI, or our own script? Depends on what G-2 documents.

@@ -12,17 +12,19 @@ Work stays inside this repository. Where a milestone needs deploy tooling behavi
 | S1.1 | Spike, Bunny: the loader (done) | M0 | L2, M2 |
 | L1 | Spike, local: Astro facts (done) | none (before or during M2) | M2 |
 | L2 | Spike, local: bundle and loader (done) | S1.1 | M2, M3 |
-| S1 | Spike, Bunny: steps 2 to 10 | S1.1 (parallel to M1 and M2) | M3, M4, M5 |
+| S1 | Spike, Bunny: steps 2 to 10 and the packed script (done) | S1.1 (parallel to M1 and M2) | M3, M4, M5 |
 | M1 | Request decision, caching and header rules, pure | M0 | M4, M5 |
 | M2 | Astro integration and build output, parts included | M0, L1, L2 | M3 |
-| M3 | Server parts at runtime | M2, L2, S1 | M4, M5 |
+| M3 | The packed script | M2, L2, S1 | M3b, M3c, M4, M5 |
+| M3b | Prism in on-demand routes | M3 | M7 |
+| M3c | Default cache provider and `_headers` Cache-Control | M3 | M7 |
 | M4 | Middleware script type | M1, M3, S1 | M5, M6 |
 | M5 | Standalone script type | M4 | M7 |
 | M6 | Preview | M4 | M7 |
-| M7 | First release | M5, M6 | reference site migration |
+| M7 | First release | M3b, M3c, M5, M6 | reference site migration |
 | Ref | Migrate the reference site (in its own repository) | M7 | none |
 
-Server code is split from the first build on, so there is no post-release split milestone.
+Server code is packed into the one script from M3 on, so there is no post-release split milestone.
 
 ## M0: repository and test setup
 
@@ -50,28 +52,18 @@ Server code is split from the first build on, so there is no post-release split 
 6. Search the newest bunny CLI's README and binary for `_headers` and `_redirects`.
 
 - **Done when:** a dated note answers each, and the per-route budget is written into ADR 0007.
-- **Done:** [2026-10-28 note](spikes/2026-10-28-l2.md); the budget is in ADR 0007.
+- **Done:** [2026-10-28 note](spikes/2026-10-28-l2.md). The budget was later dropped with the part transport (ADR 0007).
 
 ## S1: spike, Bunny
 
-One throwaway zone pair (middleware and standalone). Step 1 (S1.1) runs right after M0 and before L2 and M2, because it can break the split decision; the other steps follow in this order:
+Done. Throwaway resources, all deleted afterwards.
 
-1. **Loader:** does `import()` still fail in every form; does indirect `(0, eval)` run; does `s.js` load a chain of `System.register` parts through its fetch hook from the Storage API; SHA-256 time. Done as S1.1: [2026-10-28 note](spikes/2026-10-28-s1-1.md).
-2. **Builtins and WebAssembly:** `constants`, `path/win32`, bare `buffer`. Done for `child_process`, `vm` and `worker_threads` (each breaks startup) and for WebAssembly (compiles), together with the eager size limits: [note](spikes/2026-10-28-s1-2.md).
-3. **Part transport** (ADR 0007), in this order:
-   - 3a. Cache API in both script types, from three regions: hit and miss latency, how long a part survives before eviction, per PoP or per region, and whether `match` and `put` count as subrequests.
-   - 3b. The decisive check for the alternative: does an edge rule block a request without the secret header even when the object is already in the CDN cache?
-   - 3c. One module against split, cold, from the same three regions.
-   - Decision rule: keep the Cache API if it is fast enough and parts stay cached long enough; otherwise switch to the pull zone alternative, only if 3b passes. Also: the part path requested by a visitor answers 404 in both types.
-4. **Hand-off:** a query parameter and a header on the rewritten request, what `onOriginResponse` sees; storage ignores the query; the cache key is the visitor URL; two visitor paths mapping to one key share no cache entry.
-5. **Request facts:** `request.url` in standalone; are `Range` and `If-*` stripped and HEAD turned into GET before a script origin; does a `Response` stream.
-6. **Storage API:** `Content-Type`, `ETag`, `Last-Modified` per extension (`.css`, `.js`, `.svg`, `.webmanifest`, `.html`, none); `Range` and `If-None-Match`.
-7. **Caching:** `Set-Cookie` with `public, max-age`; `Vary: cookie` with `s-maxage`; does Bunny read `CDN-Cache-Control`.
-8. **Reserved paths:** `/_bunny/...`, `/_headers`, `/_redirects`, `/deploys/...` answer 404 in both types.
-9. **Cost:** a storage 404 at a replica (ADR 0002); cold first byte of `/code` from five PoPs after 30 minutes idle.
-10. **Other:** changing `ScriptType` through the API; which zone settings `bunny scripts create --type middleware` makes; does the SDK's `servePullZone` match production.
+1. **Loader:** `import()` fails in every form; indirect `(0, eval)` and `s.js` work; SHA-256 time. [S1.1 note](spikes/2026-10-28-s1-1.md).
+2. **Builtins, WebAssembly and script size:** `child_process`, `vm`, `worker_threads`, `constants` and `path/win32` break startup, bare `buffer` works, WebAssembly compiles, 7.3 MB of generated code starts and 9.4 MB does not. [S1.2 note](spikes/2026-10-28-s1-2.md) and [S1 note](spikes/2026-10-28-s1.md), step 2.
+3. **Server code transport:** the Cache API, the Storage API and our own pull zone were measured and rejected; every lazy chunk is packed into the script instead (ADR 0007). [S1 note](spikes/2026-10-28-s1.md) steps 3a to 3c, [transport](spikes/2026-10-28-s1-transport.md), [packed](spikes/2026-10-28-s1-packed.md), [pack tune](spikes/2026-10-28-s1-pack-tune.md), [minify](spikes/2026-10-28-s1-minify.md).
+4. **Hand-off, request facts, Storage API, caching, other** (steps 4 to 7 and 10): [S1 note](spikes/2026-10-28-s1.md).
 
-- **Done when:** a dated note per step, with the script used, and the zones are deleted. If step 1 fails, stop and decide the loader fallback before L2 and M2 start.
+Not run: step 8 (reserved paths answer 404 in both types) and step 9 (a storage 404 at a replica, cold `/code` after 30 minutes idle) need the adapter's script types. They move to the live checks of M4 and M5.
 
 ## M1: request decision, caching and header rules
 
@@ -81,21 +73,35 @@ One throwaway zone pair (middleware and standalone). Step 1 (S1.1) runs right af
 
 ## M2: Astro integration and build output
 
-- **Scope:** `bunny(options)`, `setAdapter` fields, build output detection, islands included (ADR 0003), `staticHeaders` only with a script, forcing `build.redirects: false` for script builds, parsing `_headers` and `_redirects`, `build/bundle` emitting `dist/index.js` plus grouped parts with hashes under `dist/client/_bunny/server/`, the eager size check, the budget check, the builtin check, `requires.env` from the schema, `.bunny/build.json` (ADR 0004). The script entries are stubs that answer 501.
+- **Scope:** `bunny(options)`, `setAdapter` fields, build output detection, islands included (ADR 0003), `staticHeaders` only with a script, forcing `build.redirects: false` for script builds, parsing `_headers` and `_redirects`, `build/bundle` emitting `dist/index.js` plus grouped parts with hashes under `dist/client/_bunny/server/`, the eager size check, the budget check, the builtin check, `requires.env` from the schema, `.bunny/build.json` (ADR 0004). The script entries are stubs that answer 501. M3 replaces the parts under `dist/client/_bunny/server/`, the part hashes and the budget check with the packed script.
 - **Pull requests:** three in the stack: the `_headers` and `_redirects` parsers with the build manifest, then `build/bundle`, then the integration.
 - **Done when:** the build layer of `docs/testing.md` passes for `test/app` in its four builds and every fixture; `static-only` has no script; `oversize` behaves as testing.md says; no secret value appears in the script, parts or manifest; the build logs the script type.
 - **Depends on:** M0, L1, L2.
 
-## M3: server parts at runtime
+## M3: the packed script
 
-- **Scope:** `server-parts` wrapping `s.js` with the part transport S1 chose (proposed: Cache API, `storage` on a miss), the hash check, retry after failure, one fetch for concurrent imports; `storage` with path safety and the once-per-isolate log; `platform` with the lazy deploy global.
-- **Done when:** under the local harness, `test/app`'s `/code` renders from parts; a failed part fetch recovers on the next request; concurrent first requests fetch a part once; a tampered part answers 500; importing the script without the deploy global does not throw; a route stays within the budget.
+- **Scope:** `build/bundle` assembling `dist/index.js` from `s.js`, the eager chunks and every lazy chunk brotli-compressed and base64-encoded in string literals; the Shiki wasm rewrite, skipped when the pattern is missing; stripping server files from `entryModules`; minify with Rolldown's minifier (`keepNames`, `legalComments: 'inline'`) and the source map at `dist/index.js.map`; the size check on the whole script (warn above 1 MB, fail above 7 MB); dropping `assets.reserved` from the manifest. `packed-loader` with the loader hook (`Uint8Array.fromBase64`, `DecompressionStream('brotli')`, indirect `eval`). `storage` with path safety and the once-per-isolate log; `platform` with the lazy deploy global (ADR 0007).
+- **Done when:** under the local harness, `test/app`'s `/code` renders from the packed script with the same HTML as unpacked; importing the script without the deploy global does not throw and unpacks nothing; `dist/client` holds no server code; the build fails on a refused builtin and on a script above 7 MB; a build without Shiki's wasm pattern still renders.
+- **Also:** drop Rollup's 32 kB merge and its guard from `build/bundle`, and check on `/code` that unmerged chunks cost no unpacking time.
+- **Open, measured here:** where the packed script stops starting (expected near 7 MB of script, about 25 MB of source); a build the size of the reference site; whether a request can fail on subrequests.
 - **Depends on:** M2, L2, S1.
+
+## M3b: Prism in on-demand routes
+
+- **Scope:** `<Prism>` in an on-demand route fails at request time, because prismjs loads its languages through a dynamic `require` the bundler cannot see. A Vite plugin makes those language loads visible to the bundler, so they become chunks like Shiki's. Its own pull request.
+- **Done when:** a `test/app` route with `<Prism>` renders on demand from the packed script.
+- **Depends on:** M3.
+
+## M3c: default cache provider and `_headers` Cache-Control
+
+- **Scope:** a bunny.net CDN cache provider registered by default when the project has none (ADR 0005): `Cache-Control` with `s-maxage`, `CDN-Tag`, and `invalidate()` through the purge API with `BUNNY_API_KEY`, with a clear error when the key is missing. `_headers` may set `Cache-Control` on stored files (ADR 0008). Before it ships, a bunny.net check of `s-maxage` with `max-age=0`, `CDN-Tag` on script responses, and purge speed.
+- **Done when:** `routeRules` on an on-demand `test/app` route give the expected headers, `invalidate()` calls the purge API with the right tags against a fake API, `_headers` Cache-Control lands on a stored file, and the bunny.net check is recorded.
+- **Depends on:** M3.
 
 ## M4: middleware script type
 
 - **Scope:** `app`, `scripts/middleware`, the visitor path hand-off, applying `_headers` and `_redirects` to stored files. The reference site's script type, so it comes first.
-- **Done when:** `test/app/app.test.ts` and `test/fixtures/routing` pass for middleware on the local harness and once on Bunny through the deploy contract of ADR 0004 (the bunny-edge-deploy Action, or a temporary copy under `test/` where it lacks behavior); among them `sitemap-index.xml` under `[locale]`, a POST passing Astro's origin check, multiple `Set-Cookie`, a cookie page never cached, `/code` rendering from parts, every reserved path answering 404.
+- **Done when:** `test/app/app.test.ts` and `test/fixtures/routing` pass for middleware on the local harness and once on Bunny through the deploy contract of ADR 0004 (the bunny-edge-deploy Action, or a temporary copy under `test/` where it lacks behavior); among them `sitemap-index.xml` under `[locale]`, a POST passing Astro's origin check, multiple `Set-Cookie`, a cookie page never cached, `/code` rendering from the packed script, every reserved path answering 404 (S1 step 8); a storage 404 at a replica and cold `/code` after 30 minutes idle are measured (S1 step 9).
 - **Depends on:** M1, M3, S1.
 
 ## M5: standalone script type
@@ -106,13 +112,13 @@ One throwaway zone pair (middleware and standalone). Step 1 (S1.1) runs right af
 
 ## M6: preview
 
-- **Scope:** `previewEntrypoint`. Decide what it runs (design open question 3); proposed: the real eager script and parts with storage served from `dist/client`, so preview exercises the loader.
+- **Scope:** `previewEntrypoint`. Decide what it runs (design open question 3); proposed: the real packed script with storage served from `dist/client`, so preview exercises the loader.
 - **Done when:** `astro preview` serves `test/app` and its HTTP checks pass against it; `astro dev` works on a custom port (R-DEV-1, R-DEV-3).
 - **Depends on:** M4.
 
 ## M7: first release
 
-- **Scope:** README (options, deploy requirements, manual deploy with the prepended line, the fixed script type, `s-maxage` needs purges, `_headers` and `_redirects` semantics, env limits, why Rollup and SystemJS are dependencies), the contract document for manifest fields, changelog, npm provenance.
+- **Scope:** README (options, deploy requirements, manual deploy with the prepended line, the fixed script type, `s-maxage` needs purges, `_headers` and `_redirects` semantics, env limits, why Rollup and SystemJS are dependencies, the script size limit), the contract document for manifest fields, changelog, npm provenance.
 - **Done when:** a prerelease is published after the user's explicit go, and installed into a clean project from the registry.
 - **Depends on:** M5, M6.
 
@@ -126,8 +132,8 @@ Runs in the reference site's repository, after the first release.
 
 ## Deploy tooling, outside this plan
 
-Changes the deploy tool needs are listed here and made in their own track, not from this repository: the smoke test must not pick a file under `_bunny/server/`; the bunny-edge-deploy Action's `_headers` and `_redirects` parser has to learn `! Name` (dropped today), `:splat` and `:placeholder` (kept literally) and query conditions (read as literal paths) before static builds match script builds (L2 step 5, ADR 0008); and if S1 picks the pull zone alternative for parts, the deploy tool creates its edge rule and shared secret.
+Changes the deploy tool needs are listed here and made in their own track, not from this repository: the bunny-edge-deploy Action's `_headers` and `_redirects` parser has to learn `! Name` (dropped today), `:splat` and `:placeholder` (kept literally) and query conditions (read as literal paths) before static builds match script builds (L2 step 5, ADR 0008). Server code needs no deploy tool change: it ships inside the script (ADR 0007). The deploy tool sets `BUNNY_API_KEY` as a script secret, and purges only after a successful publish or rollback, in the order upload, publish, smoke test, purge (ADR 0004).
 
 ## Later, not planned yet
 
-Each starts with its own spike: a Bunny Database session driver, a Bunny cache provider with tag purges, a Bunny Optimizer image service, an optional file table that skips the storage miss for catch-all routes.
+Each starts with its own spike: a Bunny Database session driver, a Bunny Optimizer image service, Astro's per-page `Cache-Control` on prerendered pages and `routeRules` headers in `_headers` for static builds, an optional file table that skips the storage miss for catch-all routes.

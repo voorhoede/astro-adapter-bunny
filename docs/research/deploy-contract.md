@@ -121,6 +121,7 @@ Both tools read the same file, but the reference site's deploy tool reads a stri
 - Candidates:
   - `requires.env` entries for the app's `astro:env` server secrets, so the tool stops hard-coding them.
   - `assets.immutable` for the hashed prefix, such as `_astro/`.
+  - No `assets.reserved` and no deploy tool work for server code: it ships inside the script (ADR 0007).
   - `smoke.staticPath`.
 - **Pro**: no version bump, and it moves the reference site's hard-coded lists into data.
 - **Con**: an optional field that one reader ignores silently can drift. Every addition needs a line in the contract doc.
@@ -154,7 +155,7 @@ Both tools read the same file, but the reference site's deploy tool reads a stri
 - Under middleware, the `BUNNY_STORAGE_*` variables may be unused, since storage is the pull zone origin. The reference site's deploy tool sets them anyway.
 
 **Open questions** (answers recorded 2026-10-28 from the user's decisions, see `docs/design.md`):
-1. Does a middleware script need storage credentials at all, for example for a 404 fallback that reads storage directly? The answer decides whether `requires.env` lists them for middleware. **Answered:** yes, required in both types, because both read server parts and error pages through the Storage API (ADR 0004, ADR 0007).
+1. Does a middleware script need storage credentials at all, for example for a 404 fallback that reads storage directly? The answer decides whether `requires.env` lists them for middleware. **Answered:** yes, required in both types, because both read prerendered error pages through the Storage API, and standalone also reads stored files (ADR 0004). Server code ships inside the script and needs no storage access (ADR 0007).
 2. Should the adapter emit `kind: "static"` for fully prerendered sites, which only the Action supports? **Proposed:** yes (ADR 0003).
 3. What does the adapter do when `__BUNNY_DEPLOY__` is missing (dev, `astro preview`, a manual upload)? **Answered:** read lazily on the first request, never throw at import; missing means a `private, no-store` 500 and a log line (ADR 0004).
 4. Should `environment` in the global be standardized, given the reference site writes a name and the Action writes `"production"`?

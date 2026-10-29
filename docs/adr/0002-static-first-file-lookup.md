@@ -20,7 +20,7 @@ A file in the client output must win over a dynamic on-demand route, including f
 
 Ask storage first. For a GET or HEAD whose path matches an on-demand route with params, or matches nothing on demand, the decision is `file` with `otherwise` set to render or not found. A path matching an on-demand route with a fixed pathname renders directly; Astro already warns at build when a public file collides with such a route. Non-GET requests never go to storage, so bodies are not forwarded there. One key per request: no chain of candidate keys.
 
-Reserved paths never reach storage for a visitor, in both script types: `/_bunny/` (server parts, ADR 0007), `/_headers` and `/_redirects` (ADR 0008), and `/deploys/...` through the re-prefixed rewrite (R-TYPE-2).
+Reserved paths never reach storage for a visitor, in both script types: `/_bunny/` (kept for the adapter's namespace, though no file lives there, ADR 0007), `/_headers` and `/_redirects` (ADR 0008), and `/deploys/...` through the re-prefixed rewrite (R-TYPE-2).
 
 ### Consequences
 
@@ -32,4 +32,4 @@ Reserved paths never reach storage for a visitor, in both script types: `/_bunny
 
 ### Confirmation
 
-A test app with a `[locale]` catch-all and `@astrojs/sitemap` serves `sitemap-index.xml` with 200 in both script types (M4, M5). The harness logs every storage file read and fails a request that makes more than one (server part reads are counted separately). Each reserved path answers 404. S1 measures the storage miss.
+A test app with a `[locale]` catch-all and `@astrojs/sitemap` serves `sitemap-index.xml` with 200 in both script types (M4, M5). The harness logs every storage file read and fails a request that makes more than one. Each reserved path answers 404. S1 measures the storage miss.

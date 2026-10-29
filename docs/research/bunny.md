@@ -109,6 +109,7 @@ Every claim carries one of these tags and a source key from the table below.
 
 - `caches.default` and `caches.open(name)` with `match`, `put`, `delete` only; no `keys`, `matchAll`, or options bag. [doc] `cache`
 - Entries live per region and do not replicate; TTL comes from the stored response's `Cache-Control`; 100 MB per entry. [doc] `cache`
+- Measured per PoP, not per region: a key written at the DE PoP missed at seven other European PoPs, and one written at NY missed at eight other North American PoPs. [measured 2026-10-28] S1 step 3a
 - With the pull zone set to "Override: do not cache", `put()` silently stores nothing. [doc] `cache`
 - Keys must use the requesting hostname. [doc] `cache`
 
