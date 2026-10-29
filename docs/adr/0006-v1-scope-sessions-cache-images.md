@@ -30,4 +30,4 @@ Leave all three out of v1, each behind Astro's own extension point so adding one
 
 ### Confirmation
 
-M2 builds a test app with `session: false` and no driver, and checks that `sharp` is absent from the eager script and every server part; the README lists each limit.
+M2 builds a test app with `session: false` and no driver, and checks that `sharp` is absent from the script, packed chunks included; the README lists each limit.

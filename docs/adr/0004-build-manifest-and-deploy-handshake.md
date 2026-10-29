@@ -1,5 +1,5 @@
 ---
-status: accepted (storage variables required in both types, lazy deploy global and fail closed, `requires.env` from the schema); proposed (the rest)
+status: accepted (storage variables required in both types, lazy deploy global and fail closed, `requires.env` from the schema, no `assets.reserved`); proposed (the rest)
 date: 2026-10-28
 ---
 
@@ -21,8 +21,8 @@ The reference site's deploy tool and the bunny-edge-deploy Action both read `.bu
 Version 1 plus optional fields, and keep the prepended line.
 
 - Fields: `manifestVersion: 1`, `adapter.package`, `framework.name`, `kind`, `script.{entry,type,bytes}` with `entry` pointing at `dist/index.js`, `assets.dir`, `requires.pullZone.{disableCookies:false,enableSmartCache:false,enableCacheSlice:false}`, `requires.env`.
-- Optional additions: `assets.immutable: ["_astro/"]` and `assets.reserved: ["_bunny/"]`, naming the prefix of server parts so a tool can block it with an edge rule or skip it as a smoke path. A `smoke.staticPath` field is a candidate if skipping is not enough.
-- **`requires.env` (accepted).** `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_HOST` and secret `BUNNY_STORAGE_KEY`, required in both script types, since both read error pages, and server parts on a Cache API miss, through the Storage API (ADR 0007). Revisited if S1 moves parts to the pull zone transport. Plus entries derived from `env.schema`: only `context: "server"` with `access: "secret"`, since public variables are inlined at build; `optional` when the field has `optional` or a `default`. Verified readable in an Astro 7.4.2 build.
+- Optional addition: `assets.immutable: ["_astro/"]`. No `assets.reserved`: server code ships inside the script, so no file under `dist/client` needs blocking or skipping (ADR 0007), and no deploy tool work is needed for it.
+- **`requires.env` (accepted).** `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_HOST` and secret `BUNNY_STORAGE_KEY`, required in both script types, since both read prerendered error pages through the Storage API and standalone also reads stored files there. Server code no longer needs them (ADR 0007). They stay only as long as those reads go through the Storage API. Plus entries derived from `env.schema`: only `context: "server"` with `access: "secret"`, since public variables are inlined at build; `optional` when the field has `optional` or a `default`. Verified readable in an Astro 7.4.2 build.
 - **Deploy global (accepted).** The runtime reads `__BUNNY_DEPLOY__` lazily on the first request and never throws at import. Missing: a `private, no-store` 500, one clear log line, no storage read. It never serves from the zone root. `assetPrefix` is required; `id`, `site`, `environment` are diagnostics only.
 - Every added field gets a line in a contract document in this repository, the derivation rule for `requires.env` included.
 

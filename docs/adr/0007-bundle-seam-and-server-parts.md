@@ -1,62 +1,82 @@
 ---
-status: accepted (always split, Rollup and SystemJS `system.js`, grouping, the per-target budget, eager size thresholds, parts never public, location under `_bunny/server/`, own hash check); proposed (how parts reach the script)
+status: accepted (one packed script, Rollup and SystemJS `s.js`, the loader hook, the Shiki wasm rewrite, minify, the builtin and script size checks); open (where a packed script stops starting, a build the size of the reference site, whether a request can fail on subrequests)
 date: 2026-10-28
 ---
 
-# Server code always in parts, loaded by SystemJS behind our own module
+# Server code in one packed script, loaded by SystemJS behind our own module
 
 ## Context and problem statement
 
-Bunny takes one script file. Startup goes past 500 ms at about 2 MB of real code, and a 9.5 MB script failed after its first request (measured); other sources saw failures from about 7.5 MB, and the prototype saw specific builtins fail at any size, so the limit looks like startup work rather than bytes **[guess, in two sources]**. The reference site's bundle is 2.74 MB only because Shiki is aliased out. `import()` fails in a Bunny isolate in every form: a `data:`, `blob:`, `https:` and relative specifier (S1.1, measured). Indirect `(0, eval)` and `new Function` both work there (S1.1), and `new Function` worked up to at least 18 MB (measured in the prototype). The prototype split a 10.7 MB Astro bundle at its own `import()` boundaries into a 467 KB eager part and cut cold medians by about 30%. Without grouping, one request there could need more than the 50 subrequests a request may make (448 modules, measured count).
+Bunny takes one script file. `import()` fails in a Bunny isolate in every form: a `data:`, `blob:`, `https:` and relative specifier (S1.1, measured). Indirect `(0, eval)` and `new Function` both work there (S1.1). Startup grows with the script: a 7.3 MB script of generated code answered cold requests in 1.2 to 1.3 s and a 9.4 MB one never answered (S1 step 2, measured). The L2 test app (Astro 7, one Shiki `<Code>` block) is 11.6 MB of server code in 314 `System.register` parts, so as one module it never starts (transport spike, measured), while `/code` needs about 1.8 MB of it. The reference site's bundle is 2.74 MB only because Shiki is aliased out.
 
 ## Considered options
 
-For when to split:
+For how server code reaches the isolate:
 
-- **One module, permanently.** Shiki-sized dependencies stay out of reach.
-- **Split above a size threshold.** Small sites keep the simple path, but there are two code paths and the threshold is a guess.
-- **Always split, no threshold, no option.**
+- **One module of plain code.** Shiki-sized apps do not start.
+- **Parts in storage, fetched at runtime.** Measured on bunny.net and rejected, see below.
+- **Every lazy part packed into the script as data, unpacked on first import.** Startup tracks parse work, not script bytes: at equal size, the packed script's startup gap was 2.9 to 4.6 times smaller than generated functions' (S1 packed, measured).
 
-For the module runtime that loads parts:
+For the module runtime:
 
-1. **SystemJS behind our own module.** A specified loader: `s.js` is 7,976 bytes minified (`systemjs@6.15.1`, `dist/s.min.js`), the full `system.js` 12,325 bytes (`dist/system.min.js`). Without a `document`, it fetches through a `shouldFetch` and `fetch` hook we supply and evaluates with indirect `eval`. `s.js` loaded a Rollup-split chain of `System.register` parts from the Storage API on bunny.net, a part shared through a static import included (S1.1). But `s.js` caches a failed fetch for the life of the isolate and has no `System.delete`; `system.js` has it, and deleting the failed entry then importing again fetched once more and succeeded (L2 step 3).
+1. **SystemJS behind our own module.** A specified loader: `s.js` is 7,976 bytes minified (`systemjs@6.15.1`, `dist/s.min.js`). Without a `document`, it resolves through hooks we supply and evaluates with indirect `eval`.
 2. **Our own `System.register` runtime.** We would own live bindings, cycles and top-level await that SystemJS already implements.
 3. **webpack or rspack with their own chunk loader.** A second bundler next to Vite. Heavy for one feature.
 
+### Considered and rejected for the transport
+
+- **Cache API, filled from storage on a miss.** Entries are per PoP, not per region, so every PoP pays its own miss, and a miss reads the storage main region: 0.6 to 3.7 s per 200 kB part from North America, 1.2 s from Singapore. A cold split request took 2 to 3.9 s outside Europe against 0.12 to 0.21 s for one module (S1 step 3a and 3c).
+- **Storage API alone.** Main region only: one cold `/code` render took 3.5 s from New York and 6.4 s from Singapore (transport spike, variant B).
+- **Our own pull zone with a secret header and an edge rule.** With every part a CDN hit it was 113 ms slower than one module of the route's closure in New York and 42 ms slower in Frankfurt; on a CDN miss 133 to 1,006 ms slower. Replicas lagged: some files were still read from the main region hours after upload (transport spike). It also needed an edge rule, a shared secret and a deploy tool change.
+- **Splitting at fetch level at all.** The loader discovers the next import only after evaluating a part, so `/code` fetched in five sequential rounds, costing about 100 to 250 ms even on hits (transport spike).
+- **Packed data in a comment, read with `toString()`.** bunny.net reprints the script and drops every comment form before evaluation, so the data never reaches the runtime (S1 pack tune).
+
 ## Decision outcome (accepted)
 
-Always split in v1, with SystemJS (option 1), using the full `dist/system.min.js` rather than `s.js`, because `s.js` would turn one transient fetch error into a part that fails until the isolate ends (L2).
+One script file holds all server code, and nothing is fetched at runtime for code. SystemJS `s.js` (option 1) is enough: with nothing fetched, a failed load is deterministic, so retrying through `System.delete` (the reason `system.js` was chosen before) gains nothing.
 
-- **Build.** `build/bundle` runs Rolldown to ES modules, then Rollup to `System.register`, because Rolldown 1.2.15 has no `system` format and Rollup 4.66.0 has (both verified from their type definitions). Rollup and `systemjs` become package dependencies; `system.js` is bundled into the eager script. CI installs with `npm ci --ignore-scripts`, so a dependency that needs an install script fails the build and runtime tests.
-- **Grouping is mandatory.** Rollup chunking, one chunk per `import()` target plus shared chunks, with `output.experimentalMinChunkSize` at 32 kB. The merged output is kept only when every `import()` target still has a chunk of its own; otherwise `build/bundle` uses the unmerged output. A packer that groups parts into one fetch only if Rollup's chunking cannot meet the budget.
-- **Budget, at build.** At most 8 parts for each target the eager script imports directly (pages, middleware, the session driver, islands), checked by `build/bundle`. Deeper targets, such as Shiki grammars, are not budgeted at build: in the L2 test app one grammar statically reached 10 parts. Sequential rounds (a page, then what it imports) are not checked at build either.
-- **Budget, at runtime (open).** No guard for now. S1 measured 400 sequential fetches in one request without hitting a limit, so the documented 50 subrequests was not enforced there ([note](../spikes/2026-10-28-s1.md)). Whether a request can fail on subrequests is checked later; a guard is added only if it can.
-- **Eager script size (accepted).** Fail above 7 MB raw; warn above 1 MB. Measured on 2026-10-28 (S1 step 2): a 7.3 MB script of generated code answered every cold request in 1.2 to 1.3 s, a 9.4 MB one never answered, and 1 MB cost 0.17 to 0.31 s cold. Parts have no script limit but count against 128 MB memory and parse time (about 30 ms per MB, measured in the prototype).
-- **Where parts live.** In the assets dir under `_bunny/server/`, with the content hash in the name, so they upload and roll back with the release without a deploy tool change. Not a dotfile (one deploy tool skips those), and sorts after `_astro`. The manifest names the prefix in `assets.reserved` (ADR 0004).
-- **How they reach the script (proposed).** Behind `server-parts` only, so the choice stays inside one module:
-  - Primary: bunny.net's regional Cache API. On a miss, fetch the part from the Storage API and store it in the Cache API. Nothing is publicly addressable.
-  - Fallback on the same path: the Storage API alone, main region only (about 420 ms against about 85 ms from a replica, from New York, measured).
-  - Alternative if the Cache API falls short: fetch through our own pull zone with a secret header, plus an edge rule rejecting requests without it. Costs a deploy tool change (the edge rule, a shared secret and its rotation) and recognizing the self-request in `onOriginRequest` before `routing`. Standalone still reads from the Storage API on a miss.
-  - Decision rule: keep the Cache API if S1 shows it fast enough and parts stay cached long enough. Otherwise switch to the alternative, but only if S1 step 3b shows an edge rule blocks a request without the header even when the object is already in the CDN cache.
-- **How they load.** `server-parts` owns `system.js`, its fetch hook and an import map with a SHA-256 per part. Nothing is loaded at import; the first request that needs a page loads its parts. A failed fetch is not remembered: `server-parts` deletes the failed entry with `System.delete`, so the next import retries. Concurrent first imports of one part share one fetch (both loaders, L2 step 3).
+- **Build.** `build/bundle` runs Rolldown to ES modules, then Rollup to `System.register`, because Rolldown 1.2.15 has no `system` format and Rollup 4.66.0 has (both verified from their type definitions). Rollup chunking is its default: one chunk per `import()` target plus shared chunks. Merging below 32 kB is dropped in M3, since it only saved fetches and nothing is fetched now; M3 checks on `/code` that this costs nothing. Rollup and `systemjs` are package dependencies. CI installs with `npm ci --ignore-scripts`.
+- **What `dist/index.js` holds.** `s.js`, the eager chunks as code, and every lazy chunk brotli-compressed (quality 11) and base64-encoded in a table of string literals.
+- **How a chunk loads.** On its first import, the loader hook decodes it with `Uint8Array.fromBase64`, decompresses it with `DecompressionStream('brotli')` and evaluates it with indirect `eval`. Nothing is unpacked at import. A warm request never unpacks: the loader keeps the evaluated module (S1 packed).
+- **Shiki's wasm.** The build extracts Shiki's inlined base64 WebAssembly from its chunk and packs it as bytes, so Shiki no longer decodes 622 kB of base64 on every cold request. When the pattern is missing, the build leaves the chunk as it is.
+- **Manifest.** `entryModules` entries that point at server files are stripped from Astro's server manifest.
+- **Minify.** Every chunk is minified with Rolldown's own minifier (`minify` from `rolldown/utils`, oxc inside), with `keepNames` and `legalComments: 'inline'`. Legal comments survive only inside packed string data; bunny.net drops comments in the script's own source. No option turns minification off for now.
+- **Source map.** Written next to the script as `dist/index.js.map`, outside `dist/client`, so it is not deployed.
+- **Builtins.** `build/bundle` refuses `node:child_process`, `node:vm`, `node:worker_threads`, `node:constants` and `node:path/win32`: each made the script answer 400 on every request while the publish was accepted (S1 step 2, measured).
+- **Script size.** Checked on the whole script: warn above 1 MB, fail above 7 MB (S1 step 2). A packed script carries about 3.7 times more code per MB than plain code (S1 packed, derived), so 7 MB is expected near 25 MB of source; not measured.
+- **Data stays in string literals.** bunny.net reprints the script and drops every comment, `//# sourceURL` and license comments included (S1 pack tune).
+- **`/_bunny/` stays reserved** in `routing` (ADR 0002). No file lives there any more; keeping it costs nothing and keeps the namespace for the adapter.
+
+Measured on bunny.net with the L2 app (S1 pack tune variant 6, S1 minify v6r):
+
+- Cold `/code` medians of 195 / 311 / 275 ms (New York / Frankfurt / Singapore) against 249 / 408 / 343 ms for one module of only the `/code` closure, so the packed script beat it in all three regions, although it carries the whole app (2.3 MB of script for 11.6 MB of code).
+- Cold `/` at about 104 to 181 ms (medians).
+- Minify gained about 11 ms on `/` (pooled, p 0.002), nearly all in startup; on `/code` the gain is not resolved at that sample size (S1 minify).
+- `Uint8Array.fromBase64`, `DecompressionStream` with gzip and brotli, and `node:zlib` exist on bunny.net. ICU is already set up in a fresh isolate (S1 pack tune).
+
+### Open, for M3
+
+- **Where a packed script stops starting.** Expected near the 7 MB script limit, about 25 MB of source at the measured ratio; not measured.
+- **A build the size of the reference site.** Only the L2 app was measured.
+- **Whether a request can fail on subrequests.** No code is fetched any more, but S1 measured 400 sequential fetches in one request without hitting the documented 50 ([note](../spikes/2026-10-28-s1.md)). A guard is added only if a request can fail.
 
 ### Security (accepted)
 
-- **Parts are never publicly reachable.** A mistake can inline a secret into server code, so server code must not be public. `routing` answers not found for `/_bunny/` in both types (ADR 0002), so a visitor's cache miss never reaches the file. The proposed primary transport keeps parts out of the public CDN cache entirely; the alternative relies on the edge rule holding on cache hits, which S1 must show first. Prerendered error pages use the same read path.
-- **Tampering.** The release embeds a SHA-256 per part, and the hook checks it before evaluating, using `crypto.subtle` captured at startup. The prototype verified that captured references survive app code patching globals. Hashing costs about 15 ms for 10 MB on bunny.net, against tens of milliseconds for fetching a part from the same region (S1.1). We do not rely on `integrity` in Bunny's `fetch`. A mismatch fails closed with a `private, no-store` 500.
-- **Code evaluation.** Parts come from our own storage (no third-party processor), are immutable per deploy (a rollback takes them along), and carry a hash. The reference site's maintainers review this section before migrating.
+- **Server code is never publicly reachable.** A mistake can inline a secret into server code, so server code must not be public. It lives only in the script; no part is in storage or the CDN cache.
+- **Tampering.** Code and data ship in the release itself, so there is no fetched input to check. The per-part hash check is gone with the fetch.
+- **Code evaluation.** Indirect `eval` runs only string literals the build wrote into the same script. The reference site's maintainers review this section before migrating.
 
 ### Consequences
 
 - Good: Shiki-sized dependencies work without aliasing; one code path for every site.
-- Good: we do not own a module runtime. `build/bundle` and `server-parts` are the only modules that know parts exist.
-- Good: indirect `eval`, `new Function` and a SystemJS chain from the Storage API are verified on bunny.net (S1.1). If indirect `eval` ever stops working, `new Function` is the fallback.
+- Good: no network on the code path, so no miss tail per region, no retry, no replica lag and no deploy tool change.
+- Good: we do not own a module runtime. `build/bundle` and the packed loader are the only modules that know chunks are packed.
+- Bad: a route pays unpacking of its lazy chunks on every cold request: 15 to 21 ms for `/code` (S1 pack tune variant 6).
+- Bad: the whole app counts against the script limit, so the ceiling is a site of roughly 25 MB of server code (expected), where parts in storage had none.
 - Bad: two dependencies, one with a native binary. SystemJS has had no release since 6.15.1 on 2024-04-27, about 30 months.
-- Bad: `system.js` adds about 4 kB to the eager script over `s.js`.
-- Bad: a budget at build covers only directly imported targets, so a deep chain is not bounded at all until the open runtime question is settled.
-- Bad: every first use of a part per isolate costs a subrequest, and a Cache API miss costs a Storage API fetch at the main region (about 420 ms from New York, measured). Cache API latency and eviction on Bunny are unmeasured (S1 step 3a). Whether a small app split is slower than one module is unmeasured (S1 step 3c).
-- Bad: the storage key is required in middleware too.
+- Bad: the wasm rewrite matches Shiki's current output; when Shiki changes it, the build silently stops rewriting and Shiki decodes its wasm per cold request again.
+- Bad: memory. The isolate keeps the packed strings and every unpacked module for its lifetime; not measured.
 
 ### Confirmation
 
-L2 measured files per route with and without grouping and ran both loaders with a failing then succeeding fetch and two concurrent imports ([note](../spikes/2026-10-28-l2.md)). S1.1 verified `eval`, `s.js` and hashing on Bunny ([note](../spikes/2026-10-28-s1-1.md)). S1 step 3 measures the part transport, which is then marked accepted or switched here. In the server-parts milestone, `/code` (Shiki `<Code>`) renders in both script types within the budget, a visitor requesting a part gets 404, a tampered part answers 500, and the build fails when a directly imported target exceeds 8 parts.
+S1.1 verified `eval` and `s.js` on bunny.net ([note](../spikes/2026-10-28-s1-1.md)). S1 step 2 measured builtins and the size limit ([note](../spikes/2026-10-28-s1-2.md)). S1 steps 3a to 3c ([note](../spikes/2026-10-28-s1.md)) and the transport spike ([note](../spikes/2026-10-28-s1-transport.md)) measured the transports rejected above. S1 packed ([note](../spikes/2026-10-28-s1-packed.md)), S1 pack tune ([note](../spikes/2026-10-28-s1-pack-tune.md)) and S1 minify ([note](../spikes/2026-10-28-s1-minify.md)) measured the packed script. In M3, `/code` renders from the packed script in both script types with the same HTML as unpacked, importing the script loads no chunk, the build fails on a refused builtin and on a script above 7 MB, and a build without Shiki's pattern still renders.
