@@ -1,13 +1,19 @@
 import { fill, matchPath } from '../shared/path-pattern.ts';
-import { keySegments, storageKey, type Format } from './storage-key.ts';
+import type { AstroConfig, RouteData } from 'astro';
+import { keySegments, storageKey, type Format, type Page } from './storage-key.ts';
 
-export type RouteMatch = { type: 'page' | 'endpoint' | 'redirect'; dynamic: boolean };
+export type RouteMatch = {
+  type: RouteData['type'];
+  dynamic: boolean;
+  prerendered: boolean;
+  index: boolean;
+};
 
 export type RedirectRule = { from: string; to: string; status?: number };
 
 export type Site = {
   base: string;
-  trailingSlash: 'always' | 'never' | 'ignore';
+  trailingSlash: AstroConfig['trailingSlash'];
   format: Format;
   assetsDir: string;
   notFoundPrerendered: boolean;
@@ -38,10 +44,12 @@ export function decide(
   if (method !== 'GET' && method !== 'HEAD') return { type: 'render' };
 
   const route = match(pathname);
-  if (route)
+  if (route && (route.type === 'redirect' || !route.prerendered)) {
     return route.dynamic && route.type !== 'redirect'
       ? file(local, site, { type: 'render' })
       : { type: 'render' };
+  }
+  const page = route && route.type !== 'endpoint' ? { index: route.index } : undefined;
 
   for (const rule of site.redirects) {
     const captures = matchPath(rule.from, pathname);
@@ -55,13 +63,15 @@ export function decide(
   const slash = trailingSlashTarget(pathname, local, site);
   if (slash !== undefined) return { type: 'redirect', status: 301, location: slash + search };
 
-  return file(local, site, notFound);
+  return file(local, site, notFound, page);
 }
 
 // Storage reads through the CDN ignore case, so reserved paths are compared on the key the read would use.
 function isReserved(local: string): boolean {
-  const segments = keySegments(local).map((segment) => segment.toLowerCase());
-  return segments[0] === '_bunny' || (segments.length === 1 && RESERVED_FILES.has(segments[0]!));
+  const [first, ...rest] = keySegments(local).map((segment) => segment.toLowerCase());
+  return (
+    first === '_bunny' || (first !== undefined && rest.length === 0 && RESERVED_FILES.has(first))
+  );
 }
 
 function withinBase(pathname: string, base: string): string | undefined {
@@ -76,8 +86,8 @@ function notFoundFor(site: Site): Decision {
     : { type: 'render' };
 }
 
-function file(local: string, site: Site, otherwise: Decision): Decision {
-  return { type: 'file', key: storageKey(local, site.format), otherwise };
+function file(local: string, site: Site, otherwise: Decision, page?: Page): Decision {
+  return { type: 'file', key: storageKey(local, site.format, page), otherwise };
 }
 
 function trailingSlashTarget(pathname: string, local: string, site: Site): string | undefined {

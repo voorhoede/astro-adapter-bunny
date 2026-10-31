@@ -43,7 +43,7 @@ export async function bundle({
         resolveId(id, importer) {
           if (id.startsWith('.') || id.startsWith('/') || importer === undefined) return null;
           const name = id.replace(/^node:/, '');
-          const root = name.split('/')[0]!;
+          const [root = name] = name.split('/');
           if (!BUILTINS.has(name) && !BUILTINS.has(root)) {
             throw new Error(`${id}, imported by ${importer}, was not bundled by Astro.`);
           }
@@ -71,10 +71,11 @@ export async function bundle({
   const closure = (fileName: string) =>
     new Set([...closureOf(byName, fileName)].map((c) => c.fileName));
 
-  const entryChunk = generated.find((chunk) => chunk.isEntry)!;
+  const entryChunk = generated.find((chunk) => chunk.isEntry);
+  if (!entryChunk) throw new Error('Rollup produced no entry chunk for the server output.');
   const eager = closure(entryChunk.fileName);
   const routeTargets = new Set(
-    [...eager].flatMap((fileName) => byName.get(fileName)!.dynamicImports),
+    [...eager].flatMap((fileName) => byName.get(fileName)?.dynamicImports ?? []),
   );
   const targets: Record<string, string[]> = {};
   for (const chunk of generated.filter((item) => item.isDynamicEntry)) {
