@@ -3,9 +3,9 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdtemp, readdir, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { before, describe, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { build } from 'astro';
+import { build, dev, preview } from 'astro';
 import { parseSync } from 'rolldown/utils';
 import { runScript } from '../harness/run-script.ts';
 
@@ -127,8 +127,59 @@ for (const script of ['middleware', 'standalone'] as const) {
     test('Astro renders no meta refresh page for a redirect', () => {
       assert.equal(existsSync(join(root, 'dist/client/old/index.html')), false);
     });
+
+    describe('through astro preview', () => {
+      let server: Awaited<ReturnType<typeof preview>>;
+      let origin: string;
+
+      before(async () => {
+        server = await preview({ root, logLevel: 'error', server: { port: 0 } });
+        origin = `http://localhost:${server.port}`;
+      });
+
+      after(() => server.stop());
+
+      test('a prerendered page comes from dist/client with the static Cache-Control', async () => {
+        const response = await fetch(`${origin}/about`);
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('cache-control'), 'public, max-age=0, must-revalidate');
+      });
+
+      test('an on-demand page renders through the built script', async () => {
+        const response = await fetch(`${origin}/common`);
+        assert.equal(response.status, 200);
+        assert.match(await response.text(), /<p>a\/b<\/p>/);
+        assert.equal(response.headers.get('cache-control'), 'private, no-store');
+      });
+
+      test('a page keeps every cookie it sets', async () => {
+        const response = await fetch(`${origin}/cookies`);
+        assert.equal(response.headers.getSetCookie().length, 2);
+      });
+
+      test('a server secret is read from the environment', async () => {
+        const response = await fetch(`${origin}/env`);
+        assert.match(await response.text(), /token set/);
+      });
+    });
   });
 }
+
+describe('astro dev with the adapter', () => {
+  let server: Awaited<ReturnType<typeof dev>>;
+
+  before(async () => {
+    server = await dev({ root, logLevel: 'error', server: { port: 4391 } });
+  });
+
+  after(() => server.stop());
+
+  test('serves an on-demand page on the port it was given', async () => {
+    const response = await fetch('http://localhost:4391/cookies');
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.getSetCookie().length, 2);
+  });
+});
 
 describe('a site with every route prerendered', () => {
   const project = fileURLToPath(new URL('../fixtures/static-only/', import.meta.url));
@@ -150,6 +201,35 @@ describe('a site with every route prerendered', () => {
     assert.match(lines[0]!, /^\/legacy\s+\/about\s+301$/);
     assert.ok(lines.some((line) => /^\/old\s+\/about\s+301$/.test(line)));
     assert.ok(lines.some((line) => /^\/temp\s+\/about\s+302$/.test(line)));
+  });
+
+  describe('through astro preview', () => {
+    let server: Awaited<ReturnType<typeof preview>>;
+    let origin: string;
+
+    before(async () => {
+      server = await preview({ root: project, logLevel: 'error', server: { port: 0 } });
+      origin = `http://localhost:${server.port}`;
+    });
+
+    after(() => server.stop());
+
+    for (const [path, heading] of [
+      ['/', 'home'],
+      ['/about', 'about'],
+      ['/about/', 'about'],
+    ]) {
+      test(`${path} is served from dist/client`, async () => {
+        const response = await fetch(`${origin}${path}`);
+        assert.equal(response.status, 200);
+        assert.match(await response.text(), new RegExp(`<h1>${heading}</h1>`));
+      });
+    }
+
+    test('a path with no file answers 404', async () => {
+      const response = await fetch(`${origin}/nope`);
+      assert.equal(response.status, 404);
+    });
   });
 });
 

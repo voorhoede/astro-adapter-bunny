@@ -11,10 +11,13 @@ const SHARP = 'astro/assets/services/sharp';
 const NOOP = 'astro/assets/services/noop';
 const BUNNY_CDN = fileURLToPath(new URL('../caching/bunny-cdn.ts', import.meta.url));
 
+const PREVIEW = fileURLToPath(new URL('../preview/preview.ts', import.meta.url));
+
 export function adapterConfig(buildOutput: BuildOutput, serverEntrypoint: string) {
   return {
     name: 'astro-adapter-bunny',
     serverEntrypoint,
+    previewEntrypoint: PREVIEW,
     entrypointResolution: 'auto',
     adapterFeatures: {
       buildOutput,

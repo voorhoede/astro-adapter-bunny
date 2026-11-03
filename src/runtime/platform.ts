@@ -5,7 +5,10 @@ export type Deploy = { assetPrefix: string };
 export function visitorUrl(request: Request): URL {
   const url = new URL(request.url);
   const host = request.headers.get('cdn-host') ?? request.headers.get('host') ?? url.host;
-  return new URL(`${url.pathname}${url.search}`, `https://${host}`);
+  // bunny.net appends its own value, so only the last one is not the client's.
+  const forwarded = request.headers.get('x-forwarded-proto')?.split(',').at(-1)?.trim();
+  const scheme = forwarded === 'http' ? 'http' : 'https';
+  return new URL(`${url.pathname}${url.search}`, `${scheme}://${host}`);
 }
 
 export function deploy(): Deploy {
