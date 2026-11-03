@@ -100,3 +100,20 @@ test('bundler warnings reach the build logger instead of the console', async () 
   assert.equal(warnings.length, 1);
   assert.match(warnings[0] ?? '', /eval/);
 });
+
+test('the site data is in the script as a global before any server code runs', async () => {
+  const dir = await serverOutput({
+    'entry.mjs':
+      'const base = globalThis.__BUNNY_SITE__.base; Bunny.v1.serve(() => new Response(base));',
+  });
+  const { code } = await bundle({
+    dir,
+    entry: 'entry.mjs',
+    logger: silent,
+    siteData: { base: '/docs/' },
+  });
+  const script = join(dir, 'index.js');
+  await writeFile(script, code);
+  const [response] = (await runScript(script, ['/'])).responses;
+  assert.equal(response?.body, '/docs/');
+});

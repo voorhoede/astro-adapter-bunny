@@ -29,7 +29,7 @@ The third. `routing.decide(request, site, match)` returns a `Decision`: `render`
 
 - Good: routing is a table test with no runtime, no Astro build and no network.
 - Good: a third way to run (a local preview server) is one more interpreter, not a third copy of routing.
-- Bad: middleware must carry the visitor path from `onOriginRequest` to `onOriginResponse`. Proposed: a reserved query parameter on the rewritten URL, since that hook sees the rewritten URL, with a request header as fallback.
+- Bad: middleware must carry the visitor path from `onOriginRequest` to `onOriginResponse`. It travels as the reserved query parameter `__bunny_path` on the rewritten URL, which the response hook sees and storage ignores (measured on bunny.net on 2026-10-28 and 2026-11-03).
 - Bad: the `match` callback is an abstraction over `app.match()` whose exact semantics (prerendered dynamic routes falling back) must be pinned by tests against a real build.
 
 ### Confirmation

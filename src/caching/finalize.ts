@@ -16,6 +16,8 @@ export function finalize(response: Response, origin: Origin, context: Context): 
   const headers = new Headers(response.headers);
 
   if (origin === 'stored') {
+    // Storage sends max-age=25600000 through the CDN; only _headers or the defaults below decide.
+    headers.delete('cache-control');
     for (const [name, value] of context.headersFor(context.pathname)) {
       if (!headers.has(name)) headers.set(name, value);
     }

@@ -1,5 +1,5 @@
 ---
-status: accepted (storage variables required in both types, lazy deploy global and fail closed, `requires.env` from the schema, `BUNNY_API_KEY`, purge after publish and rollback); proposed (the rest)
+status: accepted (storage variables for standalone only, lazy deploy global and fail closed, `requires.env` from the schema, `BUNNY_API_KEY`, purge after publish and rollback); proposed (the rest)
 date: 2026-10-28
 ---
 
@@ -21,7 +21,7 @@ The adapter does not deploy. Two deploy tools read `.bunny/build.json`: the bunn
 Version 1 plus optional fields, and keep the prepended line.
 
 - **Fields:** `manifestVersion: 1`, `adapter.package` and `adapter.version`, `framework.name` and `framework.version`, `kind`, `script.{entry,type,bytes}` with `entry` pointing at `dist/index.js`, `assets.dir`, `assets.immutable: ["_astro/"]`, `requires.pullZone.{disableCookies:false,enableSmartCache:false,enableCacheSlice:false}` and `requires.env`.
-- **`requires.env` (accepted).** `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_HOST` and the secret `BUNNY_STORAGE_KEY`, required in both script types, since both read prerendered error pages through the Storage API and standalone also reads every stored file there. Plus entries derived from `env.schema`: only fields with `context: "server"` and `access: "secret"`, since public variables are inlined at build; `optional` when the field has `optional` or a `default`. Verified readable in an Astro 7.4.2 build.
+- **`requires.env` (accepted).** `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_HOST` and the secret `BUNNY_STORAGE_KEY` for a standalone script, which reads every stored file through the Storage API. A middleware script needs none of them: it reads stored files through the CDN, and its error pages too, with a fetch to its own pull zone (measured on 2026-11-03: 200 in 140 ms as a miss and 22 ms as a hit, no loop). Plus entries derived from `env.schema`: only fields with `context: "server"` and `access: "secret"`, since public variables are inlined at build; `optional` when the field has `optional` or a `default`. Verified readable in an Astro 7.4.2 build.
 - **Deploy global (accepted).** The script reads `__BUNNY_DEPLOY__` lazily on the first request and never throws at import. When it is missing, a request answers a `private, no-store` 500 with one clear log line and no storage read; the script never serves from the zone root. `assetPrefix` is required; `id`, `site` and `environment` are diagnostics only.
 - **`BUNNY_API_KEY` (accepted).** A secret entry in `requires.env` for the default cache provider's `invalidate()`. The deploy tool already holds the key and sets it as a script secret at publish; it is never written into the build output.
 - **Purge (accepted).** Pages cached at the CDN outlive a release, so a deploy tool purges the pull zone after a successful publish (after its smoke test) and after a successful rollback, and never after a failed one, which keeps the cache matching the live release.
@@ -33,7 +33,6 @@ Limits for the README and build warnings, measured on bunny.net in October 2026:
 
 - Good: no change to either deploy tool to adopt the adapter.
 - Good: secrets stay out of the bundle and the manifest; only names travel, and no one keeps a list of secrets by hand.
-- Bad: the storage key is required even in middleware, where static files need no credentials.
 - Bad: a secret read through `getSecret()` outside the schema is not listed; the fix is adding it to the schema.
 - Bad: an optional field one reader ignores can drift silently.
 - Bad: a manual deploy must prepend the line itself; the README shows how.

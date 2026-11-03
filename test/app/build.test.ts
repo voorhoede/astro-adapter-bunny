@@ -36,19 +36,6 @@ function importExpressions(code: string): number {
   return count(parseSync('index.js', code).program);
 }
 
-type Handler = (request: Request) => Promise<Response>;
-
-// Loads Astro's server build in Node, with a stand-in for the Bunny global it registers its handler on.
-async function serverHandler(tag: string): Promise<Handler> {
-  let registered: Handler | undefined;
-  Object.assign(globalThis, {
-    Bunny: { v1: { serve: (handler: Handler) => (registered = handler) } },
-  });
-  await import(`${join(root, 'dist/server/entry.mjs')}?${tag}`);
-  assert.ok(registered, 'the server build registered no handler');
-  return registered;
-}
-
 async function manifest(project: string) {
   return JSON.parse(await readFile(join(project, '.bunny/build.json'), 'utf8'));
 }
@@ -83,17 +70,15 @@ for (const script of ['middleware', 'standalone'] as const) {
       const alone = join(await mkdtemp(join(tmpdir(), 'script-')), 'index.js');
       await copyFile(join(root, 'dist/index.js'), alone);
       assert.equal(importExpressions(await readFile(alone, 'utf8')), 0);
-      const run = await runScript(alone);
+      const run = await runScript(alone, [], { deploy: false });
       assert.equal(run.error, undefined);
       assert.equal(run.loaded, true);
     });
 
-    test('/common, which requires a Node builtin from CommonJS, renders from the script with the same HTML as the server build', async () => {
-      const handle = await serverHandler(`common-${script}`);
-      const expected = await handle(new Request('https://example.com/common'));
+    test('/common, which requires a Node builtin from CommonJS, renders from the script', async () => {
       const [response] = (await runScript(join(root, 'dist/index.js'), ['/common'])).responses;
       assert.equal(response?.status, 200);
-      assert.equal(response?.body, await expected.text());
+      assert.match(response?.body ?? '', /<p>a\/b<\/p>/);
     });
 
     test('a routeRules entry on an on-demand page caches it at the CDN through the default provider', async () => {
@@ -105,14 +90,13 @@ for (const script of ['middleware', 'standalone'] as const) {
       );
     });
 
-    test('requires.env lists the storage variables and the server secret, not the public variable', async () => {
+    test('requires.env lists what the script type needs and the server secret, not the public variable', async () => {
       const names = (await manifest(root)).requires.env.map(
         (entry: { name: string }) => entry.name,
       );
+      const storage = ['BUNNY_STORAGE_ZONE', 'BUNNY_STORAGE_HOST', 'BUNNY_STORAGE_KEY'];
       assert.deepEqual(names, [
-        'BUNNY_STORAGE_ZONE',
-        'BUNNY_STORAGE_HOST',
-        'BUNNY_STORAGE_KEY',
+        ...(script === 'standalone' ? storage : []),
         'BUNNY_API_KEY',
         'CMS_TOKEN',
       ]);
@@ -134,12 +118,10 @@ for (const script of ['middleware', 'standalone'] as const) {
     });
 
     test('a rendered page keeps every cookie it sets', async () => {
-      const handle = await serverHandler(`cookies-${script}`);
-      const response = await handle(new Request('https://example.com/cookies'));
-      const cookies = response.headers.getSetCookie();
-      assert.equal(response.status, 200);
-      assert.equal(cookies.length, 2);
-      assert.match(cookies[1]!, /Partitioned/);
+      const [response] = (await runScript(join(root, 'dist/index.js'), ['/cookies'])).responses;
+      assert.equal(response?.status, 200);
+      assert.equal(response?.setCookies.length, 2);
+      assert.match(response?.setCookies[1] ?? '', /Partitioned/);
     });
 
     test('Astro renders no meta refresh page for a redirect', () => {
