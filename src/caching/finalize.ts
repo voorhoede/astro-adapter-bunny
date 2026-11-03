@@ -17,7 +17,7 @@ export function finalize(response: Response, origin: Origin, context: Context): 
 
   if (origin === 'stored') {
     for (const [name, value] of context.headersFor(context.pathname)) {
-      if (name.toLowerCase() !== 'cache-control' && !headers.has(name)) headers.set(name, value);
+      if (!headers.has(name)) headers.set(name, value);
     }
   }
 
@@ -30,9 +30,11 @@ export function finalize(response: Response, origin: Origin, context: Context): 
       headers.set('cache-control', PRIVATE);
       context.log(`Made ${context.route} ${PRIVATE}, because the response ${reason}.`);
     }
+  } else if (headers.has('cache-control')) {
+    // Set by _headers, which beats both defaults below.
   } else if (origin === 'stored' && context.pathname.startsWith(`/${context.assetsDir}/`)) {
     headers.set('cache-control', IMMUTABLE);
-  } else if (!headers.has('cache-control')) {
+  } else {
     headers.set('cache-control', context.staticCacheControl);
   }
 

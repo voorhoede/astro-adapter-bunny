@@ -127,13 +127,34 @@ test('_headers never overwrites a header the stored file already has', () => {
   assert.equal(result.headers.get('content-security-policy'), "default-src 'self'");
 });
 
-test('_headers cannot set Cache-Control', () => {
+test('_headers may set Cache-Control on a stored file, over staticCacheControl', () => {
   const result = finalize(
     response(),
     'stored',
     context({ headersFor: () => [['cache-control', 'public, max-age=999']] }),
   );
-  assert.equal(cacheControl(result), STATIC);
+  assert.equal(cacheControl(result), 'public, max-age=999');
+});
+
+test('_headers Cache-Control also beats the immutable default under build.assets', () => {
+  const result = finalize(
+    response(),
+    'stored',
+    context({
+      pathname: '/_astro/app.Ab12.js',
+      headersFor: () => [['cache-control', 'public, max-age=60']],
+    }),
+  );
+  assert.equal(cacheControl(result), 'public, max-age=60');
+});
+
+test('a stored 5xx stays private, whatever _headers says', () => {
+  const result = finalize(
+    response({}, 503),
+    'stored',
+    context({ headersFor: () => [['cache-control', 'public, max-age=999']] }),
+  );
+  assert.equal(cacheControl(result), PRIVATE);
 });
 
 test('a redirect the adapter makes gets staticCacheControl', () => {
