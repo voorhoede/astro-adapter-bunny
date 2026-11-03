@@ -20,7 +20,7 @@ test('a script build names the script, the assets, the pull zone settings and th
       framework: { name: 'astro', version: '7.4.2' },
       kind: 'ssr',
       script: { entry: 'dist/index.js', type: 'middleware', bytes: 1234 },
-      assets: { dir: 'dist/client', immutable: ['_astro/'], reserved: ['_bunny/'] },
+      assets: { dir: 'dist/client', immutable: ['_astro/'] },
       requires: {
         pullZone: { disableCookies: false, enableSmartCache: false, enableCacheSlice: false },
         env: [{ name: 'BUNNY_STORAGE_KEY', secret: true }],

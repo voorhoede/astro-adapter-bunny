@@ -1,15 +1,16 @@
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AstroConfig, AstroIntegration } from 'astro';
 import { adapterConfig, configOverrides, type ImageServiceMode } from './adapter-config.ts';
 import { buildManifest } from './build-manifest.ts';
-import { bundle, checkEagerSize } from './bundle.ts';
+import { bundle } from './bundle.ts';
 import { parseHeadersFile } from './headers-file.ts';
 import { parseRedirectsFile } from './redirects-file.ts';
 import { requiredEnv } from './required-env.ts';
+import { checkScriptSize, packageSizes } from './script-size.ts';
 
 export type Options = {
   script?: 'middleware' | 'standalone';
@@ -19,20 +20,37 @@ export type Options = {
 const EDGE_RULE_LIMIT = 50;
 const require = createRequire(import.meta.url);
 
-// Stands in for the script until the script types land; it never serves a deploy.
-const STUB_SCRIPT = `Bunny.v1.serve(() => new Response('Not implemented yet', { status: 501, headers: { 'cache-control': 'private, no-store' } }));\n`;
-
 export default function bunny({
   script = 'middleware',
   imageService = 'compile',
 }: Options = {}): AstroIntegration {
   let config: AstroConfig;
+  const serverModules = new Map<string, number>();
 
   return {
     name: 'astro-adapter-bunny',
     hooks: {
       'astro:config:setup': ({ config: userConfig, command, updateConfig }) => {
         updateConfig(configOverrides(userConfig, command, imageService));
+        const serverDir = resolve(fileURLToPath(userConfig.build.server));
+        updateConfig({
+          vite: {
+            plugins: [
+              {
+                name: 'bunny-package-sizes',
+                generateBundle(options, output) {
+                  if (options.dir === undefined || resolve(options.dir) !== serverDir) return;
+                  for (const item of Object.values(output)) {
+                    if (item.type !== 'chunk') continue;
+                    for (const [id, module] of Object.entries(item.modules)) {
+                      serverModules.set(id, module.renderedLength);
+                    }
+                  }
+                },
+              },
+            ],
+          },
+        });
       },
       'astro:config:done': ({ config: resolved, setAdapter, buildOutput, logger }) => {
         config = resolved;
@@ -75,30 +93,20 @@ export default function bunny({
           return;
         }
 
-        const output = await bundle({ dir: server, entry: serverEntry });
-        const eagerBytes = output.chunks
-          .filter((chunk) => output.eager.includes(chunk.fileName))
-          .reduce((sum, chunk) => sum + chunk.bytes, 0);
-        if (checkEagerSize(eagerBytes) === 'warn') {
+        const { code } = await bundle({ dir: server, entry: serverEntry, logger });
+        const scriptBytes = Buffer.byteLength(code);
+        if (checkScriptSize(scriptBytes, packageSizes(serverModules)) === 'warn') {
           logger.warn(
-            `The eager script is ${(eagerBytes / 1024 / 1024).toFixed(1)} MB; above 1 MB, cold starts slow down.`,
+            `The script is ${(scriptBytes / 1024 / 1024).toFixed(1)} MB; above 7 MB, bunny.net may not start it in time.`,
           );
         }
-
-        const partsDir = join(client, '_bunny/server');
-        await mkdir(partsDir, { recursive: true });
-        await Promise.all(
-          output.chunks
-            .filter((chunk) => !output.eager.includes(chunk.fileName))
-            .map((chunk) => writeFile(join(partsDir, chunk.fileName), chunk.code)),
-        );
-        await writeFile(join(fileURLToPath(config.outDir), 'index.js'), STUB_SCRIPT);
+        await writeFile(join(fileURLToPath(config.outDir), 'index.js'), code);
         await writeManifest(
           root,
           buildManifest({
             kind: 'ssr',
             scriptType: script,
-            scriptBytes: Buffer.byteLength(STUB_SCRIPT),
+            scriptBytes,
             ...common,
           }),
         );

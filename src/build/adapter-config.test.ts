@@ -37,13 +37,22 @@ test('redirects are answered at runtime, and every dependency is bundled', () =>
     image: { service: { entrypoint: 'astro/assets/services/sharp' } },
   });
   assert.deepEqual(overrides.build, { redirects: false });
-  assert.deepEqual(overrides.vite, { ssr: { noExternal: true } });
+  assert.equal(overrides.vite?.ssr?.noExternal, true);
+});
+
+test('a build resolves packages for Deno first, the runtime bunny.net runs, and keeps the server defaults', () => {
+  assert.deepEqual(configOverrides({}, 'build').vite?.ssr?.resolve?.conditions, [
+    'deno',
+    'module',
+    'node',
+    'development|production',
+  ]);
 });
 
 test('astro dev keeps its own dependency handling, since bundling everything breaks the dev server', () => {
   const overrides = configOverrides({}, 'dev');
   assert.equal(overrides.vite, undefined);
-  assert.deepEqual(configOverrides({}, 'build').vite, { ssr: { noExternal: true } });
+  assert.equal(configOverrides({}, 'build').vite?.ssr?.noExternal, true);
 });
 
 test('the default Sharp service runs at build, and the no-op service at runtime', () => {

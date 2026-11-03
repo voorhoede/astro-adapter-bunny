@@ -21,6 +21,8 @@ bunny.net documents a 10 MB script limit and a 500 ms startup limit (docs.bunny.
 A second pass. In `astro:build:done`, `build/bundle` runs Rolldown over `dist/server` with code splitting off and writes `dist/index.js`. Every dynamic `import()` becomes part of the same file, so the script imports nothing at runtime except Node builtins.
 
 - **No minify and no source map**, to keep the build simple.
+- **The server entry registers itself** through `@bunny.net/edgescript-sdk`, so `build/bundle` knows nothing about bunny.net beyond the builtin checks.
+- **Resolved for Deno first.** The server build resolves the `deno` export condition before Vite's defaults, since bunny.net runs Deno. Without it, Astro's build picked the SDK's Node variant, which bundled `@hono/node-server` with `node:http` and `node:stream` into the script (seen with SDK 0.13.0 on 2026-11-03).
 - **Node builtins** stay external as `node:` imports. The build fails on `node:child_process`, `node:vm`, `node:worker_threads`, `node:constants` and `node:path/win32`: with any of them the script answered 400 on every request while the publish was accepted (measured on 2026-10-28). A bare package import that Astro left unbundled also fails the build, naming it.
 - **Bundler warnings** go through Astro's logger, not straight to the console.
 - **Size.** Checked on the whole script: a warning above 7 MB and a build error above 10 MB. The error names the five largest packages in the bundle, so the user knows what to remove.
