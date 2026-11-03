@@ -171,3 +171,26 @@ test('a response with immutable headers is copied instead of failing', () => {
   assert.equal(result.status, 302);
   assert.equal(cacheControl(result), PRIVATE);
 });
+
+test('the Cache-Control storage sends through the CDN is replaced by the static default', () => {
+  const result = finalize(response({ 'cache-control': 'max-age=25600000' }), 'stored', context());
+  assert.equal(cacheControl(result), STATIC);
+});
+
+test('the Cache-Control storage sends is replaced by the immutable default under build.assets', () => {
+  const result = finalize(
+    response({ 'cache-control': 'max-age=25600000' }),
+    'stored',
+    context({ pathname: '/_astro/app.Ab12.js' }),
+  );
+  assert.equal(cacheControl(result), IMMUTABLE);
+});
+
+test('_headers still beats the Cache-Control storage sends', () => {
+  const result = finalize(
+    response({ 'cache-control': 'max-age=25600000' }),
+    'stored',
+    context({ headersFor: () => [['cache-control', 'public, max-age=60']] }),
+  );
+  assert.equal(cacheControl(result), 'public, max-age=60');
+});

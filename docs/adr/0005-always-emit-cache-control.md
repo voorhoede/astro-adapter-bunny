@@ -10,7 +10,7 @@ date: 2026-10-28, updated 2026-10-30
 Measured on bunny.net in October 2026:
 
 - With `CacheControlMaxAgeOverride: -1`, a pull zone caches a script response without `Cache-Control` as `public, max-age=2592000`, middleware short-circuits included. With the default of a storage-origin zone (2592000) it caches everything for 30 days, `private` included, and one visitor's cookie page was served to another.
-- Storage sends no `Cache-Control` of its own.
+- Storage sends no `Cache-Control` through the Storage API, but through the CDN it hands the response hook `Cache-Control: max-age=25600000` (measured on 2026-11-03). The adapter drops that value on stored files.
 - Cookies are never part of the cache key, and the zone ignores `Vary`: a cacheable response with `Vary: cookie` was cached and served to everyone, and the `Vary` header was stripped.
 - The zone does not read `CDN-Cache-Control` in either direction.
 - `public, max-age=0, s-maxage=300` from a script is not cached, and the visitor gets `Cache-Control: no-cache` instead. `public, s-maxage=300` is cached and reaches the visitor unchanged.
