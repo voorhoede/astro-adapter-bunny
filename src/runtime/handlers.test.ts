@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createMiddleware, type Route, type SiteData } from './middleware.ts';
+import { createHandlers, type Route, type SiteData } from './handlers.ts';
 
 const STORAGE = 'http://storage.bunnycdn.com:9000';
 const HOST = 'www.example.com';
@@ -29,7 +29,7 @@ function setup({ deploy = true, renderThrows = false } = {}) {
   const fetched: string[] = [];
   const logged: string[] = [];
   let errorPageFetch: ((url: string) => Promise<Response>) | undefined;
-  const middleware = createMiddleware({
+  const handlers = createHandlers({
     app: {
       match: (request) => routes[new URL(request.url).pathname],
       render: async (request, options) => {
@@ -49,15 +49,22 @@ function setup({ deploy = true, renderThrows = false } = {}) {
       if (!deploy) throw new Error('missing');
       return { assetPrefix: 'deploys/abc' };
     },
-    fetchPage: async (url) => {
+    readFile: async ({ key, url }) => {
       fetched.push(url.href);
-      return url.pathname === '/404.html'
-        ? new Response('not found page')
-        : new Response(null, { status: 404 });
+      if (key === '404.html') return new Response('not found page');
+      if (key === 'robots.txt') return new Response('User-agent: *');
+      return undefined;
     },
     log: (line) => logged.push(line),
   });
-  return { middleware, rendered, fetched, logged, errorPage: () => errorPageFetch };
+  return {
+    middleware: handlers,
+    handlers,
+    rendered,
+    fetched,
+    logged,
+    errorPage: () => errorPageFetch,
+  };
 }
 
 function originRequest(path: string, init: RequestInit = {}) {
@@ -212,4 +219,71 @@ test("Astro's error page fetch reads the prerendered page through the CDN", asyn
   const response = await errorPage()?.(`https://${HOST}/404.html`);
   assert.equal(response?.status, 200);
   assert.deepEqual(fetched, [`https://${HOST}/404.html`]);
+});
+
+function visitorRequest(path: string, init: RequestInit = {}) {
+  return new Request(`https://${HOST}${path}`, {
+    ...init,
+    headers: { 'cdn-host': HOST, 'x-real-ip': '203.0.113.7', ...init.headers },
+  });
+}
+
+test('standalone reads a stored file itself, with _headers and the static Cache-Control', async () => {
+  const { handlers, fetched } = setup();
+  const response = await handlers.serve(visitorRequest('/robots.txt'));
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), 'User-agent: *');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('cache-control'), site.staticCacheControl);
+  assert.deepEqual(fetched, [`https://${HOST}/robots.txt`]);
+});
+
+test('standalone renders an on-demand page with the client address, and leaves private', async () => {
+  const { handlers, rendered } = setup();
+  const response = await handlers.serve(visitorRequest('/blog?page=2'));
+  assert.equal(rendered[0]?.url, `https://${HOST}/blog?page=2`);
+  assert.equal(rendered[0]?.clientAddress, '203.0.113.7');
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+});
+
+test('standalone renders a catch-all route when storage has no file', async () => {
+  const { handlers, rendered } = setup();
+  const response = await handlers.serve(visitorRequest('/en'));
+  assert.equal(await response.text(), 'rendered');
+  assert.equal(rendered.length, 1);
+});
+
+test('standalone answers a path nothing claims with the prerendered 404 page and status 404', async () => {
+  const { handlers } = setup();
+  const response = await handlers.serve(visitorRequest('/nope'));
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), 'not found page');
+});
+
+test('standalone answers a reserved path with the 404 page', async () => {
+  const { handlers } = setup();
+  const response = await handlers.serve(visitorRequest('/_headers'));
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), 'not found page');
+});
+
+test('standalone answers a _redirects rule with a redirect', async () => {
+  const { handlers } = setup();
+  const response = await handlers.serve(visitorRequest('/old?a=1'));
+  assert.equal(response.status, 301);
+  assert.equal(response.headers.get('location'), '/new?a=1');
+});
+
+test('standalone renders a POST with its body', async () => {
+  const { handlers, rendered } = setup();
+  await handlers.serve(visitorRequest('/blog', { method: 'POST', body: 'name=a' }));
+  assert.equal(rendered[0]?.body, 'name=a');
+});
+
+test('standalone without the deploy global answers 500, private, and reads nothing', async () => {
+  const { handlers, fetched } = setup({ deploy: false });
+  const response = await handlers.serve(visitorRequest('/robots.txt'));
+  assert.equal(response.status, 500);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(fetched, []);
 });
