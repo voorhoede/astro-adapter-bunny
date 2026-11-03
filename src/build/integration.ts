@@ -9,12 +9,14 @@ import { buildManifest } from './build-manifest.ts';
 import { bundle } from './bundle.ts';
 import { parseHeadersFile } from './headers-file.ts';
 import { parseRedirectsFile } from './redirects-file.ts';
+import type { SiteData } from '../runtime/middleware.ts';
 import { requiredEnv } from './required-env.ts';
 import { checkScriptSize, packageSizes } from './script-size.ts';
 
 export type Options = {
   script?: 'middleware' | 'standalone';
   imageService?: ImageServiceMode;
+  staticCacheControl?: string;
 };
 
 const EDGE_RULE_LIMIT = 50;
@@ -23,6 +25,7 @@ const require = createRequire(import.meta.url);
 export default function bunny({
   script = 'middleware',
   imageService = 'compile',
+  staticCacheControl = 'public, max-age=0, must-revalidate',
 }: Options = {}): AstroIntegration {
   let config: AstroConfig;
   const serverModules = new Map<string, number>();
@@ -57,7 +60,7 @@ export default function bunny({
         setAdapter(
           adapterConfig(
             buildOutput,
-            fileURLToPath(new URL('../scripts/server.ts', import.meta.url)),
+            fileURLToPath(new URL(`../scripts/${script}.ts`, import.meta.url)),
           ),
         );
         logger.info(`Building a ${script} script.`);
@@ -76,7 +79,7 @@ export default function bunny({
         const common = {
           assetsDir: config.build.assets,
           versions,
-          env: requiredEnv(config.env?.schema),
+          env: requiredEnv(config.env?.schema, script),
         };
 
         if (!existsSync(join(server, serverEntry))) {
@@ -93,7 +96,17 @@ export default function bunny({
           return;
         }
 
-        const { code } = await bundle({ dir: server, entry: serverEntry, logger });
+        const siteData = {
+          base: config.base.replace(/\/$/, ''),
+          trailingSlash: config.trailingSlash,
+          format: config.build.format,
+          assetsDir: config.build.assets,
+          notFoundPrerendered: existsSync(join(client, '404.html')),
+          redirects,
+          headers,
+          staticCacheControl,
+        } satisfies SiteData;
+        const { code } = await bundle({ dir: server, entry: serverEntry, logger, siteData });
         const scriptBytes = Buffer.byteLength(code);
         if (checkScriptSize(scriptBytes, packageSizes(serverModules)) === 'warn') {
           logger.warn(

@@ -74,7 +74,7 @@ function isReserved(local: string): boolean {
   );
 }
 
-function withinBase(pathname: string, base: string): string | undefined {
+export function withinBase(pathname: string, base: string): string | undefined {
   if (base === '') return pathname;
   if (pathname === base) return '/';
   return pathname.startsWith(`${base}/`) ? pathname.slice(base.length) : undefined;

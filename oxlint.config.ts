@@ -10,5 +10,9 @@ export default defineConfig({
   env: {
     builtin: true,
   },
+  rules: {
+    // Global names fixed by the deploy line and the build, not by this code.
+    'no-underscore-dangle': ['error', { allow: ['__BUNNY_DEPLOY__', '__BUNNY_SITE__'] }],
+  },
   ignorePatterns: ['docs/**'],
 });

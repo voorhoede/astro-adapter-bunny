@@ -56,8 +56,11 @@ Package metadata (`astro-adapter-bunny`, ISC, peer `astro@^7.4`, Node range), Ty
 
 ## M4: middleware script type
 
-- **Scope:** `app`, `storage` with path safety and a once-per-isolate log, `platform` with the lazy deploy global, `scripts/middleware`, the visitor path hand-off, applying `_headers` and `_redirects` to stored files. The reference site's script type, so it comes first.
-- **Done when:** `test/app/app.test.ts` and `test/fixtures/routing` pass for middleware on the local harness and once on bunny.net through the deploy contract of ADR 0004 (the bunny-edge-deploy Action, or a temporary copy under `test/` where it lacks behavior); among them `sitemap-index.xml` under `[locale]`, a POST passing Astro's origin check, multiple `Set-Cookie`, a cookie page never cached, every reserved path answering 404. A storage 404 at a replica and a cold request after 30 minutes idle are measured.
+- **Scope:** `runtime/platform` (visitor URL from `cdn-host`, the deploy global read lazily), `runtime/storage` (Storage API reads inside the deploy folder, used by standalone in M5), `runtime/middleware` (`decide` in `onOriginRequest`, the visitor path handed to `onOriginResponse` as `__bunny_path`, `finalize` on every exit, error pages fetched through the site's own pull zone), `requires.env` without storage variables for middleware, `scripts/middleware` through `@bunny.net/edgescript-sdk`, the site data written into the script by `build/bundle`, the `script` option choosing the entry, and `staticCacheControl`.
+- **Done when:** `test/fixtures/routing` passes for middleware on the local harness, which stands in for the pull zone; on bunny.net once, with a storage zone, the middleware script and a pull zone: `sitemap-index.xml` written after the adapter under `[locale]`, `[locale]` rendering, a prerendered page with `_headers`, a `_redirects` rule, a POST through Astro's origin check, two `Set-Cookie` on a private page, the 404 page for an unknown path and for every reserved path.
+- **Verified on bunny.net on 2026-11-03:** every item above answered as expected.
+- **Open, found on bunny.net:** the visitor received `Cache-Control: max-age=25600000` for stored files, where the script sent `public, max-age=0, must-revalidate` or the immutable header, with the pull zone overrides at `-1`. To understand before the first release, since a browser would keep a page for 296 days.
+- **Later:** a clear log line naming a missing required variable; a deploy through the bunny-edge-deploy Action.
 - **Depends on:** M1, M3.
 
 ## M5: standalone script type

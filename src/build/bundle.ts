@@ -20,10 +20,12 @@ export async function bundle({
   dir,
   entry,
   logger,
+  siteData,
 }: {
   dir: string;
   entry: string;
   logger: BuildLogger;
+  siteData?: unknown;
 }): Promise<Script> {
   const builtins = new Set<string>();
   const build = await rolldown({
@@ -48,7 +50,13 @@ export async function bundle({
       },
     ],
   });
-  const { output } = await build.generate({ format: 'esm', codeSplitting: false });
+  const { output } = await build.generate({
+    format: 'esm',
+    codeSplitting: false,
+    ...(siteData === undefined
+      ? {}
+      : { banner: `globalThis.__BUNNY_SITE__ = ${JSON.stringify(siteData)};` }),
+  });
   await build.close();
   const [script] = output;
   return { code: script.code, builtins: [...builtins].toSorted() };
