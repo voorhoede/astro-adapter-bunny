@@ -2,8 +2,10 @@ import { writeFile } from 'node:fs/promises';
 import { defineConfig } from 'astro/config';
 import bunny from '../../../src/build/integration.ts';
 
+const script = process.env.TEST_SCRIPT === 'standalone' ? 'standalone' : 'middleware';
+
 export default defineConfig({
-  adapter: bunny(),
+  adapter: bunny({ script }),
   build: { inlineStylesheets: 'never' },
   integrations: [
     {

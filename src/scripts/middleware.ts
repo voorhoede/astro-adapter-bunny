@@ -1,21 +1,24 @@
 import * as BunnySDK from '@bunny.net/edgescript-sdk';
 import type { OriginRequestContext } from '@bunny.net/edgescript-sdk';
 import { createApp } from 'astro/app/entrypoint';
-import { createMiddleware } from '../runtime/middleware.ts';
+import { createHandlers } from '../runtime/handlers.ts';
 import { deploy, siteData } from '../runtime/platform.ts';
 
 type OriginRequestHook = (ctx: OriginRequestContext) => Promise<Request> | Promise<Response>;
 
 const app = createApp();
 
-const middleware = createMiddleware({
+const middleware = createHandlers({
   app: {
     match: (request) => app.match(request, true),
     render: (request, options) => app.render(request, { addCookieHeader: true, ...options }),
   },
   site: siteData,
   deploy,
-  fetchPage: (url) => fetch(url),
+  readFile: async ({ url }) => {
+    const response = await fetch(url);
+    return response.ok ? response : undefined;
+  },
   log: (line) => console.error(line),
 });
 

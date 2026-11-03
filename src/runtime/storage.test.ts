@@ -52,3 +52,23 @@ test('missing storage variables fail, naming them', async () => {
   storageApi();
   await assert.rejects(readStored('404.html', 'deploys/abc'), /BUNNY_STORAGE_KEY/);
 });
+
+test('a type the Storage API does not know comes from the file extension', async () => {
+  mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('{}', { headers: { 'content-type': 'application/octet-stream' } }),
+  );
+  const response = await readStored('site.webmanifest', 'deploys/abc');
+  assert.equal(response?.headers.get('content-type'), 'application/manifest+json');
+});
+
+test('a type the Storage API sends is kept', async () => {
+  mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('a{}', { headers: { 'content-type': 'text/css' } }),
+  );
+  const response = await readStored('_astro/app.css', 'deploys/abc');
+  assert.equal(response?.headers.get('content-type'), 'text/css');
+});

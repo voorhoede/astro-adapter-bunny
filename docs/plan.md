@@ -65,8 +65,9 @@ Package metadata (`astro-adapter-bunny`, ISC, peer `astro@^7.4`, Node range), Ty
 
 ## M5: standalone script type
 
-- **Scope:** `storage` file reads with conditional headers and `Content-Type` from the extension, `scripts/standalone`.
-- **Done when:** the same checks as M4 pass for standalone, locally and on bunny.net; a conditional GET answers 304 at the CDN.
+- **Scope:** `runtime/handlers` shared by both script types, with `serve` for standalone; `runtime/storage` reading every stored file through the Storage API, with the type taken from the extension where the API sends `application/octet-stream`; `scripts/standalone` through `@bunny.net/edgescript-sdk`.
+- **Done when:** `test/fixtures/routing` passes for both script types on the local harness, and on bunny.net once with a storage zone and a standalone script; a conditional GET answers 304 at the CDN.
+- **Verified on bunny.net on 2026-11-03:** every fixture path answered as expected, `site.webmanifest` came as `application/manifest+json`, and a GET with `If-None-Match` on an `_astro` file answered 304.
 - **Depends on:** M4.
 
 ## M6: preview

@@ -1,4 +1,4 @@
-import type { SiteData } from './middleware.ts';
+import type { SiteData } from './handlers.ts';
 
 export type Deploy = { assetPrefix: string };
 

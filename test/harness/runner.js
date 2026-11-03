@@ -53,8 +53,8 @@ globalThis.fetch = async (input, init) => {
   return storedFile(url.pathname.replace(`/${zone}`, ''));
 };
 
-async function throughPullZone(spec) {
-  const request = new Request(`${STORAGE_ORIGIN}${spec.path}`, {
+function visitorRequest(spec, origin) {
+  return new Request(`${origin}${spec.path}`, {
     method: spec.method ?? 'GET',
     headers: {
       host: HOST,
@@ -65,6 +65,10 @@ async function throughPullZone(spec) {
     },
     ...(spec.body === undefined ? {} : { body: spec.body }),
   });
+}
+
+async function throughPullZone(spec) {
+  const request = visitorRequest(spec, STORAGE_ORIGIN);
   try {
     let result = request;
     for (const hook of middlewares.onOriginRequest) {
@@ -97,7 +101,7 @@ for (const spec of run.loaded ? (options.requests ?? []) : []) {
   try {
     const pending = middlewares
       ? throughPullZone(spec)
-      : handler(new Request(new URL(spec.path, `https://${HOST}`)));
+      : handler(visitorRequest(spec, `https://${HOST}`));
     // oxlint-disable-next-line no-await-in-loop
     const response = await pending;
     run.responses.push({

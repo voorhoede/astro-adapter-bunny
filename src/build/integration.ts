@@ -9,7 +9,7 @@ import { buildManifest } from './build-manifest.ts';
 import { bundle } from './bundle.ts';
 import { parseHeadersFile } from './headers-file.ts';
 import { parseRedirectsFile } from './redirects-file.ts';
-import type { SiteData } from '../runtime/middleware.ts';
+import type { SiteData } from '../runtime/handlers.ts';
 import { requiredEnv } from './required-env.ts';
 import { checkScriptSize, packageSizes } from './script-size.ts';
 

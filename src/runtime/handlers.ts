@@ -13,14 +13,15 @@ type RenderOptions<R> = {
   routeData?: R;
 };
 
-export type MiddlewareDeps<R extends Route> = {
+export type HandlerDeps<R extends Route> = {
   app: {
     match: (request: Request) => R | undefined;
     render: (request: Request, options: RenderOptions<R>) => Promise<Response>;
   };
   site: () => SiteData;
   deploy: () => Deploy;
-  fetchPage: (url: URL) => Promise<Response>;
+  // Middleware reads through its own pull zone, standalone through the Storage API.
+  readFile: (file: { key: string; url: URL }) => Promise<Response | undefined>;
   log: (line: string) => void;
 };
 
@@ -30,7 +31,7 @@ type OriginResponse = { request: Request; response: Response };
 const HANDOFF = '__bunny_path';
 const ERROR_PAGE = /(404|500)(?:\.html|\/index\.html|\/)?$/;
 
-export function createMiddleware<R extends Route>(deps: MiddlewareDeps<R>) {
+export function createHandlers<R extends Route>(deps: HandlerDeps<R>) {
   function decideFor(visitor: URL, method: string) {
     const site = deps.site();
     const routes = new Map<string, R | undefined>();
@@ -65,10 +66,8 @@ export function createMiddleware<R extends Route>(deps: MiddlewareDeps<R>) {
     });
   }
 
-  // Error pages come through the CDN, so they are read from a nearby replica and can be cached there.
-  async function page(key: string, visitor: URL, site: SiteData): Promise<Response | undefined> {
-    const response = await deps.fetchPage(new URL(`${site.base}/${key}`, visitor.origin));
-    return response.ok ? response : undefined;
+  function page(key: string, visitor: URL, site: SiteData) {
+    return deps.readFile({ key, url: new URL(`${site.base}/${key}`, visitor.origin) });
   }
 
   async function render(request: Request, visitor: URL, site: SiteData, route?: R) {
@@ -87,7 +86,7 @@ export function createMiddleware<R extends Route>(deps: MiddlewareDeps<R>) {
     return finish(response, 'rendered', visitor, site, route);
   }
 
-  // Answers a decision in the response hook, where storage can no longer be asked through the CDN.
+  // Answers a decision after the first stored file was missing, or one that needs no stored file.
   async function answer(
     decision: Decision,
     request: Request,
@@ -129,6 +128,20 @@ export function createMiddleware<R extends Route>(deps: MiddlewareDeps<R>) {
   }
 
   return {
+    async serve(request: Request): Promise<Response> {
+      try {
+        deps.deploy();
+        const visitor = visitorUrl(request);
+        const { site, decision, route } = decideFor(visitor, request.method);
+        if (decision.type !== 'file') return await answer(decision, request, visitor, site, route);
+        const stored = await page(decision.key, visitor, site);
+        if (!stored) return await answer(decision.otherwise, request, visitor, site, route);
+        return finish(withStatus(stored, decision.status), 'stored', visitor, site);
+      } catch (error) {
+        return failure(error);
+      }
+    },
+
     async onOriginRequest({ request }: OriginRequest): Promise<Request | Response> {
       try {
         const { assetPrefix } = deps.deploy();
