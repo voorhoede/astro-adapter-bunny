@@ -6,6 +6,7 @@ const script = process.env.TEST_SCRIPT === 'standalone' ? 'standalone' : 'middle
 export default defineConfig({
   adapter: bunny({ script }),
   redirects: { '/old': '/about' },
+  routeRules: { '/cached': { maxAge: 300, swr: 60 } },
   env: {
     schema: {
       CMS_TOKEN: envField.string({ context: 'server', access: 'secret' }),

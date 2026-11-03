@@ -48,14 +48,10 @@ Package metadata (`astro-adapter-bunny`, ISC, peer `astro@^7.4`, Node range), Ty
 
 ## M3c: default cache provider and `_headers` Cache-Control
 
-- **Scope:** a bunny.net CDN cache provider registered by default when the project has none (ADR 0005), and `_headers` setting `Cache-Control` on stored files (ADR 0008).
-- **Measured on 2026-10-30** (standalone script, one PoP in Germany, linked pull zone with smart cache and cookie stripping off):
-  - `public, max-age=0, s-maxage=300` is not cached, and bunny.net answers the visitor with `Cache-Control: no-cache`.
-  - `public, s-maxage=300` is cached and reaches the visitor unchanged.
-  - `CDN-Tag` from the script reaches the visitor.
-  - A tag purge (`POST /pullzone/{id}/purgeCache` with `CacheTag`) answered 204, but the entry was still a hit more than 20 s later. The cause is not known.
-- **Decide first:** the header the provider emits for a browser, given the first fact, and whether `invalidate()` purges by tag or by URL, given the last.
-- **Done when:** `routeRules` on an on-demand `test/app` route give the expected headers, `invalidate()` calls the purge API correctly against a fake API, a clear error when `BUNNY_API_KEY` is missing, `_headers` Cache-Control lands on a stored file, and the purge works once on bunny.net.
+- **Scope:** a bunny.net CDN cache provider registered by default when the project has none (ADR 0005), `BUNNY_API_KEY` as an optional secret in `requires.env`, and `_headers` setting `Cache-Control` on stored files (ADR 0008).
+- **Decided from measurements on 2026-10-30 and 2026-11-03:** the provider emits `public, s-maxage` and never `max-age=0`; `invalidate()` purges by URL and refuses tags, since tag purges did not take effect within 5 minutes while URL and zone purges did within 30 s.
+- **Done when:** `routeRules` on an on-demand `test/app` route give the expected header from the script and are cached at the CDN on bunny.net; `invalidate()` calls the purge API with the right URL against a fake API, and fails clearly for tags, without the key and without `site`; `_headers` Cache-Control lands on a stored file.
+- **Later:** `invalidate()` by tag, if bunny.net makes tag purges work for script responses.
 - **Depends on:** M3.
 
 ## M4: middleware script type

@@ -1,4 +1,5 @@
-import type { AstroAdapter, AstroUserConfig, HookParameters } from 'astro';
+import { fileURLToPath } from 'node:url';
+import type { AstroAdapter, AstroConfig, AstroUserConfig, HookParameters } from 'astro';
 
 type BuildOutput = NonNullable<NonNullable<AstroAdapter['adapterFeatures']>['buildOutput']>;
 
@@ -8,6 +9,7 @@ export type ImageServiceMode = 'compile' | 'passthrough' | 'custom';
 
 const SHARP = 'astro/assets/services/sharp';
 const NOOP = 'astro/assets/services/noop';
+const BUNNY_CDN = fileURLToPath(new URL('../caching/bunny-cdn.ts', import.meta.url));
 
 export function adapterConfig(buildOutput: BuildOutput, serverEntrypoint: string) {
   return {
@@ -35,7 +37,9 @@ export function adapterConfig(buildOutput: BuildOutput, serverEntrypoint: string
 const SERVER_CONDITIONS = ['deno', 'module', 'node', 'development|production'];
 
 export function configOverrides(
-  config: { image?: { service?: NonNullable<AstroUserConfig['image']>['service'] } },
+  config: Partial<Pick<AstroConfig, 'site' | 'cache'>> & {
+    image?: { service?: NonNullable<AstroUserConfig['image']>['service'] };
+  },
   command: HookParameters<'astro:config:setup'>['command'] = 'build',
   imageService: ImageServiceMode = 'compile',
 ): ConfigUpdate {
@@ -49,7 +53,12 @@ export function configOverrides(
       ? {}
       : { vite: { ssr: { noExternal: true, resolve: { conditions: SERVER_CONDITIONS } } } }),
     ...(image ? { image } : {}),
+    ...(config.cache?.provider ? {} : { cache: { provider: cacheProvider(config.site) } }),
   };
+}
+
+function cacheProvider(site: string | undefined) {
+  return { name: 'bunny.net CDN', entrypoint: BUNNY_CDN, config: site ? { site } : {} };
 }
 
 function imageFor(mode: ImageServiceMode, usesSharp: boolean) {

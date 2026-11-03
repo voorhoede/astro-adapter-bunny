@@ -96,6 +96,15 @@ for (const script of ['middleware', 'standalone'] as const) {
       assert.equal(response?.body, await expected.text());
     });
 
+    test('a routeRules entry on an on-demand page caches it at the CDN through the default provider', async () => {
+      const [response] = (await runScript(join(root, 'dist/index.js'), ['/cached'])).responses;
+      assert.equal(response?.status, 200);
+      assert.equal(
+        response?.headers?.['cache-control'],
+        'public, s-maxage=300, stale-while-revalidate=60',
+      );
+    });
+
     test('requires.env lists the storage variables and the server secret, not the public variable', async () => {
       const names = (await manifest(root)).requires.env.map(
         (entry: { name: string }) => entry.name,
@@ -104,6 +113,7 @@ for (const script of ['middleware', 'standalone'] as const) {
         'BUNNY_STORAGE_ZONE',
         'BUNNY_STORAGE_HOST',
         'BUNNY_STORAGE_KEY',
+        'BUNNY_API_KEY',
         'CMS_TOKEN',
       ]);
     });
