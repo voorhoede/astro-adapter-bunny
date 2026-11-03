@@ -172,5 +172,5 @@ Labeled as such; the reference site does not need these, an open source adapter 
 | G-6 | Astro's `i18n` routing config works, including fallback and domains. | Should |
 | G-7 | Typed access to the Bunny request context (client IP, geo, env) through `locals`, without making it required. | Should |
 | G-8 | Clear errors for unsupported Astro features and for a bundle over the size limit. | Should |
-| G-9 | Semantic versioning, a changelog, a declared supported Astro and Node range, and provenance on npm publish. | Must |
+| G-9 | Semantic versioning, a changelog, and a declared supported Astro and Node range. | Must |
 | G-10 | Nothing is fetched from third parties at runtime; the package installs and works with `npm ci --ignore-scripts`. | Should |

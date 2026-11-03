@@ -148,12 +148,10 @@ Removed against the reference site's current adapter, each with the reason:
 
 - `dist/index.js` **(accepted)**: the one script, as in the bunny CLI's examples. Holds the entry, `routing`, `caching`, all server code and the header table, unminified and without a source map (ADR 0007).
 - `dist/client/`: every static file, prerendered pages, `_headers` and `_redirects` as written. No server code.
-- `.bunny/build.json`, version 1 plus optional fields readers ignore (ADR 0004): `kind`, `script.{entry,type,bytes}`, `assets.dir`, optional `assets.immutable: ["_astro/"]`, `requires.pullZone`, `requires.env` with the storage variables required in both types and the app's server secrets.
+- `.bunny/build.json`, version 1 plus optional fields readers ignore (ADR 0004): `kind`, `script.{entry,type,bytes}`, `assets.dir`, optional `assets.immutable: ["_astro/"]`, `requires.pullZone`, `requires.env` with the storage variables for standalone only, the optional `BUNNY_API_KEY`, and the app's server secrets.
 - Settings the adapter cannot express in v1 (`CacheControlMaxAgeOverride: -1`) go in the README as deploy requirements.
 
 ## How the reference site migrates
-
-After the first release, not before **(accepted)**.
 
 | Reference site today | After |
 | --- | --- |

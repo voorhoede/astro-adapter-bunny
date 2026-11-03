@@ -13,12 +13,11 @@ Work stays inside this repository. Where a milestone needs deploy tooling behavi
 | M2 | Astro integration and build output (done) | M0 | M3 |
 | M3 | One plain script | M2 | M3c, M4, M5 |
 | M3b | Prism in on-demand routes (deferred) | M3 | none |
-| M3c | Default cache provider and `_headers` Cache-Control | M3 | M7 |
+| M3c | Default cache provider and `_headers` Cache-Control | M3 | none |
 | M4 | Middleware script type | M1, M3 | M5, M6 |
-| M5 | Standalone script type | M4 | M7 |
-| M6 | Preview | M4 | M7 |
-| M7 | First release | M3c, M5, M6 | reference site migration |
-| Ref | Migrate the reference site (in its own repository) | M7 | none |
+| M5 | Standalone script type | M4 | none |
+| M6 | Preview | M4 | none |
+| Ref | Migrate the reference site (in its own repository) | M3c, M5, M6 | none |
 
 ## M0: repository and test setup (done)
 
@@ -77,25 +76,21 @@ Package metadata (`astro-adapter-bunny`, ISC, peer `astro@^7.4`, Node range), Ty
 - **Static builds:** without a script, preview resolves a path to its page in `dist/client` (`/about` to `about/index.html` or `about.html`) and answers `404.html` with status 404.
 - **Depends on:** M4.
 
-## M7: first release
-
-- **Scope:** README (options, deploy requirements, manual deploy with the prepended line, the fixed script type, `s-maxage` needs purges, `_headers` and `_redirects` semantics, env limits, the script size limits, Shiki and Prism as known limits), the contract document for manifest fields, changelog, npm provenance.
-- **Done when:** a prerelease is published after the user's explicit go, and installed into a clean project from the registry.
-- **Depends on:** M3c, M5, M6.
-
 ## Reference site migration
 
-Runs in the reference site's repository, after the first release.
+Runs in the reference site's repository.
 
 - **Scope:** the change listed in `docs/design.md`: import, options, `public/_headers` from its response headers module, `frame-ancestors` into Astro's CSP config, delete its adapter package and runtime shim. Its Shiki alias stays.
 - **Done when:** the reference site's builds deploy through its own deploy tool to commit environments and pass its smoke tests and the checks in `docs/testing.md`; a rollback to the previous release still serves.
-- **Depends on:** M7 (the reference site's rule: published from the official registry).
+- **Depends on:** M3c, M5, M6.
 
 ## Deploy tooling, outside this plan
 
 Changes the deploy tool needs are listed here and made in their own track, not from this repository: the bunny-edge-deploy Action's `_headers` and `_redirects` parser has to learn `! Name` (dropped today), `:splat` and `:placeholder` (kept literally) and query conditions (read as literal paths) before static builds match script builds (ADR 0008). The deploy tool sets `BUNNY_API_KEY` as a script secret, and purges only after a successful publish or rollback, in the order upload, publish, smoke test, purge (ADR 0004).
 
 ## Later, not planned yet
+
+- A build step to JavaScript, a README, and publishing to npm.
 
 - Where between 7 and 10 MB a plain script stops starting on bunny.net, measured with real Astro output.
 - A Shiki stub option for projects that never highlight code at runtime.

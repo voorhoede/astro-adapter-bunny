@@ -91,7 +91,7 @@ What local cannot reproduce, so it belongs to the live layer:
 - **Cost.** Edge Scripting is priced at $0.20 per million requests plus $0.02 per 1000 s CPU (bunny.net pricing page, as recorded in 2026-09). A smoke run is a few hundred requests, so its script cost rounds to zero [E]. Storage and replica pricing and any account minimum were not checked [?].
 - **Credentials.**
   - Bunny has one full-access account API key and no scoped keys. So the test account must not be one that holds the reference site's or other production zones.
-  - The key lives in a GitHub environment `bunny-live` with a required reviewer, available only to `workflow_dispatch`, `schedule` and the release workflow on this repository. Never on `pull_request` or `pull_request_target` from forks.
+  - The key lives in a GitHub environment `bunny-live` with a required reviewer, available only to `workflow_dispatch` and `schedule` on this repository. Never on `pull_request` or `pull_request_target` from forks.
   - Values fetched at run time, such as storage zone passwords returned by the API, are not GitHub secrets and are not masked automatically. The deploy script registers each with `::add-mask::` before anything else touches it, and filters CLI output to non-secret fields.
   - App secrets for the test app are fake values. They are still set as Bunny secrets, because what is tested is that secrets resolve at runtime.
   - A trial account without a verified card gets suspended mid-run (observed 2026-09-30), so the account needs a card on file.
@@ -269,7 +269,7 @@ Every Must from `docs/requirements.md`. Layers: **U** unit, **B** build, **L** l
 | R-IMG-2 | Font files from the fonts API served from `_astro/` with immutable caching | B, L |
 | R-DEV-1 | `astro dev` on the full app on port 4323 answers `/` and `/en/` | B (smoke) |
 | G-2 | The live run deploys with the documented deploy path for both modes | Live |
-| G-9 | CI checks `peerDependencies.astro`, `engines.node`, a `changelog.md` entry per user-facing change, and installs with `npm ci --ignore-scripts`; publish with provenance in the release workflow | CI |
+| G-9 | CI checks `peerDependencies.astro`, `engines.node`, a `changelog.md` entry per user-facing change, and installs with `npm ci --ignore-scripts` | CI |
 
 ### Reference site rules
 
@@ -310,8 +310,7 @@ R-BUILD-5 and G-8 (`oversize`), R-HDR-7 (unit rules once decided), R-HDR-8 (live
 | --- | --- | --- |
 | Every pull request | Type check, unit, build-level on all fixtures and the four full app builds, local runtime checks on Deno for both script types, bundle size report as job summary compared with `main` | None |
 | `workflow_dispatch`, with inputs for ref, script types and whether to measure | Live smoke, optional rollback run, optional measurement run | `bunny-live` environment |
-| Weekly schedule | Live smoke, recording `Deno.version` from the script, to catch Bunny platform changes between our releases | `bunny-live` environment |
-| Release workflow | Live smoke on the release commit before publish | `bunny-live` environment |
+| Weekly schedule | Live smoke, recording `Deno.version` from the script, to catch Bunny platform changes | `bunny-live` environment |
 
 - Forks get the pull request jobs only.
 - A red live run on `main` is triaged like a failing test: reproduced at the lowest layer, or recorded as a platform change in `docs/measurements/`.
@@ -333,7 +332,7 @@ Cities follow the prototype's cold-path measurement: Amsterdam, Frankfurt, Londo
 
 1. **Size thresholds.** Warn above 7 MB, fail above 10 MB (ADR 0007). Where between those a plain script stops starting is a later measurement.
 2. **Test account.** The API key is account-wide, so live tests need a Bunny account with nothing else in it. Who owns it, and who pays?
-3. **Live triggers.** Manual, weekly and release gate as proposed, or also a pull request label?
+3. **Live triggers.** Manual and weekly as proposed, or also a pull request label?
 4. **Live deploy path.** bunny-edge-deploy (tests `.bunny/build.json` end to end with a real reader), the Bunny CLI, or our own script? Depends on what G-2 documents.
 5. **Manifest contract test.** Run bunny-edge-deploy's manifest reader on every build's `.bunny/build.json` in CI, pinned to a commit?
 6. **Reference site canary.** Build the reference site with the new adapter in its own CI before switching? That lives in the reference site's repository, not here.
