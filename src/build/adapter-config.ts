@@ -31,6 +31,9 @@ export function adapterConfig(buildOutput: BuildOutput, serverEntrypoint: string
   } satisfies AstroAdapter;
 }
 
+// bunny.net runs Deno; Vite's own server defaults follow, since setting conditions replaces them.
+const SERVER_CONDITIONS = ['deno', 'module', 'node', 'development|production'];
+
 export function configOverrides(
   config: { image?: { service?: NonNullable<AstroUserConfig['image']>['service'] } },
   command: HookParameters<'astro:config:setup'>['command'] = 'build',
@@ -42,7 +45,9 @@ export function configOverrides(
   const image = imageFor(imageService, usesSharp);
   return {
     build: { redirects: false },
-    ...(command === 'dev' ? {} : { vite: { ssr: { noExternal: true } } }),
+    ...(command === 'dev'
+      ? {}
+      : { vite: { ssr: { noExternal: true, resolve: { conditions: SERVER_CONDITIONS } } } }),
     ...(image ? { image } : {}),
   };
 }

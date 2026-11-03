@@ -28,7 +28,7 @@ export function buildManifest(input: ManifestInput) {
     ...common,
     kind: 'ssr',
     script: { entry: 'dist/index.js', type: input.scriptType, bytes: input.scriptBytes },
-    assets: { dir: 'dist/client', immutable, reserved: ['_bunny/'] },
+    assets: { dir: 'dist/client', immutable },
     requires: {
       pullZone: { disableCookies: false, enableSmartCache: false, enableCacheSlice: false },
       env: input.env,

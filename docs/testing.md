@@ -283,7 +283,7 @@ Every Must from `docs/requirements.md`. Layers: **U** unit, **B** build, **L** l
 
 | Check | Layers |
 | --- | --- |
-| `/css` renders from the script in both script types, with the same HTML as the server build | L, Live |
+| `/common` (a CommonJS `require` of a builtin) renders from the script in both script types, with the same HTML as the server build | L, Live |
 | The script contains no `import(` | B |
 | The build fails on a refused builtin, on an unbundled package and above 10 MB, and warns above 7 MB | B |
 
@@ -322,7 +322,7 @@ R-BUILD-5 and G-8 (`oversize`), R-HDR-7 (unit rules once decided), R-HDR-8 (live
 | --- | --- | --- |
 | Script size | Raw and gzip bytes of `dist/index.js` per build | Every PR, compared with `main`; warn above 7 MB, fail above 10 MB (ADR 0007) |
 | Startup probe | Deno import time of the script alone, `Bunny.v1` stubbed | Every PR. A signal for top-level work only: a local import is no timing match for the edge |
-| Cold start on Bunny | First byte on `/env` (small) and `/css` (a CommonJS dependency) per script type, from ten cities after 30 min idle, then again at once | Measurement run. A cold-path measurement in the prototype showed low-traffic requests are nearly always cold, so the second round is not assumed warm |
+| Cold start on Bunny | First byte on `/env` (small) and `/common` (a CommonJS module) per script type, from ten cities after 30 min idle, then again at once | Measurement run. A cold-path measurement in the prototype showed low-traffic requests are nearly always cold, so the second round is not assumed warm |
 | Static miss latency per script type | First byte on files uploaded fresh for the run (guaranteed misses without a purge), from ten cities | Measurement run. Compare with the prototype's numbers (New York: about 420 ms standalone, 85 ms middleware) |
 | HTML hit vs miss | First byte on `/` and `/about`, first and second request | Measurement run; feeds requirements question 2 (an open performance issue on the reference site) |
 | Conditional requests | Repeat with `If-None-Match`, status and first byte | Measurement run; decides whether R-HDR-8 becomes Must |

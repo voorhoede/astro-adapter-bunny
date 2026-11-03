@@ -19,8 +19,8 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "rollup": "^4.65.1",
-    "systemjs": "^6.15.1"
+    "@bunny.net/edgescript-sdk": "^0.13.0",
+    "rolldown": "^1.2.15"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
