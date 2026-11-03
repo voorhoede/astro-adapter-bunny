@@ -72,8 +72,9 @@ Package metadata (`astro-adapter-bunny`, ISC, peer `astro@^7.4`, Node range), Ty
 
 ## M6: preview
 
-- **Scope:** `previewEntrypoint`. Proposed: the real script with storage served from `dist/client`.
-- **Done when:** `astro preview` serves `test/app` and its HTTP checks pass against it; `astro dev` works on a custom port (R-DEV-1, R-DEV-3).
+- **Scope:** `previewEntrypoint`: `astro preview` loads the real `dist/index.js` with a `Bunny` stub and a deploy line, behind `preview/pull-zone`, which stands in for the pull zone as measured and serves storage from `dist/client`. The Deno test harness uses the same pull zone stand-in. `visitorUrl` takes the scheme from the last `x-forwarded-proto` value, so a POST passes Astro's origin check over http in preview.
+- **Done when:** `astro preview` serves `test/app` in both script types (stored pages, on-demand pages, cookies, a server secret from the environment), and `astro dev` serves it on a given port.
+- **Static builds:** without a script, preview resolves a path to its page in `dist/client` (`/about` to `about/index.html` or `about.html`) and answers `404.html` with status 404.
 - **Depends on:** M4.
 
 ## M7: first release

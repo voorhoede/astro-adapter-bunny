@@ -1,7 +1,8 @@
-// Runs a script under Deno like bunny.net: as measured, middleware sees the storage URL, a Request reads storage, a throw is an empty 500.
+// Runs a built script under Deno, the runtime bunny.net uses, behind the same pull zone stand-in as astro preview.
+import { createPullZone } from '../../src/preview/pull-zone.ts';
+
 const [script] = Deno.args;
 const options = JSON.parse(Deno.env.get('RUN_OPTIONS') ?? '{}');
-const STORAGE_ORIGIN = 'http://storage.bunnycdn.com:9000';
 const HOST = 'example.com';
 const TYPES = {
   html: 'text/html',
@@ -11,14 +12,13 @@ const TYPES = {
   css: 'text/css',
 };
 
-let handler;
-let middlewares;
+const registered = {};
 let reads = 0;
 
 globalThis.Bunny = {
   v1: {
-    serve: (fetch) => (handler = fetch),
-    registerMiddlewares: (registered) => (middlewares = registered),
+    serve: (handler) => (registered.serve = handler),
+    registerMiddlewares: (middlewares) => (registered.middlewares = middlewares),
     waitUntil: () => {},
   },
 };
@@ -40,11 +40,12 @@ async function storedFile(path) {
   }
 }
 
+const pullZone = createPullZone(registered, storedFile);
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const request = new Request(input, init);
   const url = new URL(request.url);
-  if (url.host === HOST) return throughPullZone({ path: `${url.pathname}${url.search}` });
+  if (url.host === HOST) return pullZone(request);
   const zone = Deno.env.get('BUNNY_STORAGE_ZONE');
   if (url.host !== Deno.env.get('BUNNY_STORAGE_HOST')) return nativeFetch(input, init);
   if (request.headers.get('accesskey') !== Deno.env.get('BUNNY_STORAGE_KEY')) {
@@ -53,44 +54,18 @@ globalThis.fetch = async (input, init) => {
   return storedFile(url.pathname.replace(`/${zone}`, ''));
 };
 
-function visitorRequest(spec, origin) {
-  return new Request(`${origin}${spec.path}`, {
+function visitorRequest(spec) {
+  return new Request(`https://${HOST}${spec.path}`, {
     method: spec.method ?? 'GET',
-    headers: {
-      host: HOST,
-      'cdn-host': HOST,
-      'x-forwarded-proto': 'https',
-      'x-real-ip': '203.0.113.7',
-      ...spec.headers,
-    },
+    headers: { 'x-real-ip': '203.0.113.7', ...spec.headers },
     ...(spec.body === undefined ? {} : { body: spec.body }),
   });
-}
-
-async function throughPullZone(spec) {
-  const request = visitorRequest(spec, STORAGE_ORIGIN);
-  try {
-    let result = request;
-    for (const hook of middlewares.onOriginRequest) {
-      // oxlint-disable-next-line no-await-in-loop
-      result = await hook({ request: result });
-      if (result instanceof Response) return result;
-    }
-    let response = await storedFile(new URL(result.url).pathname);
-    for (const hook of middlewares.onOriginResponse) {
-      // oxlint-disable-next-line no-await-in-loop
-      response = await hook({ request: result, response });
-    }
-    return response;
-  } catch {
-    return new Response(null, { status: 500, headers: { 'cache-control': 'no-cache' } });
-  }
 }
 
 const run = { loaded: false, responses: [] };
 try {
   await import(new URL(script, 'file://').href);
-  run.loaded = handler !== undefined || middlewares !== undefined;
+  run.loaded = registered.serve !== undefined || registered.middlewares !== undefined;
 } catch (error) {
   run.error = String(error?.stack ?? error);
 }
@@ -99,11 +74,8 @@ try {
 for (const spec of run.loaded ? (options.requests ?? []) : []) {
   const before = reads;
   try {
-    const pending = middlewares
-      ? throughPullZone(spec)
-      : handler(visitorRequest(spec, `https://${HOST}`));
     // oxlint-disable-next-line no-await-in-loop
-    const response = await pending;
+    const response = await pullZone(visitorRequest(spec));
     run.responses.push({
       status: response.status,
       headers: Object.fromEntries(response.headers),

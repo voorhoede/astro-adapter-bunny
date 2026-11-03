@@ -36,3 +36,10 @@ test('the site data comes from the global the build writes into the script', () 
   Object.assign(globalThis, { __BUNNY_SITE__: { base: '/' } });
   assert.deepEqual(siteData(), { base: '/' });
 });
+
+test('the scheme is the last x-forwarded-proto value, the one bunny.net appends', () => {
+  const request = new Request('http://storage.bunnycdn.com:9000/', {
+    headers: { 'cdn-host': 'localhost:4321', 'x-forwarded-proto': 'https, http' },
+  });
+  assert.equal(visitorUrl(request).origin, 'http://localhost:4321');
+});
