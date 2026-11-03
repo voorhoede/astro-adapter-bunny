@@ -29,6 +29,7 @@ for (const path of run.loaded ? paths : []) {
     const response = await handler(new Request(new URL(path, 'https://example.com')));
     run.responses.push({
       status: response.status,
+      headers: Object.fromEntries(response.headers),
       // oxlint-disable-next-line no-await-in-loop
       body: await response.text(),
       unpacked: unpacked - before,

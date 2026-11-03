@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { requiredEnv } from './required-env.ts';
 
-const storage = [
+const adapter = [
   { name: 'BUNNY_STORAGE_ZONE' },
   { name: 'BUNNY_STORAGE_HOST' },
   { name: 'BUNNY_STORAGE_KEY', secret: true },
+  { name: 'BUNNY_API_KEY', secret: true, optional: true },
 ];
 
-test('without an env schema, only the storage variables are required', () => {
-  assert.deepEqual(requiredEnv(undefined), storage);
+test('without an env schema, only the adapter variables are listed, the purge key optional', () => {
+  assert.deepEqual(requiredEnv(undefined), adapter);
 });
 
 test('server secrets from the schema are added, in schema order', () => {
@@ -19,7 +20,7 @@ test('server secrets from the schema are added, in schema order', () => {
     SEARCH_KEY: { context: 'server', access: 'secret', type: 'string', default: 'none' },
   } as const;
   assert.deepEqual(requiredEnv(schema), [
-    ...storage,
+    ...adapter,
     { name: 'CMS_TOKEN', secret: true },
     { name: 'PREVIEW_SECRET', secret: true, optional: true },
     { name: 'SEARCH_KEY', secret: true, optional: true },
@@ -31,5 +32,5 @@ test('public variables are left out, since Astro inlines them at build', () => {
     SITE_NAME: { context: 'client', access: 'public', type: 'string' },
     API_URL: { context: 'server', access: 'public', type: 'string' },
   } as const;
-  assert.deepEqual(requiredEnv(schema), storage);
+  assert.deepEqual(requiredEnv(schema), adapter);
 });

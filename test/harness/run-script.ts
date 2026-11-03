@@ -6,7 +6,12 @@ export type ScriptRun = {
   loaded: boolean;
   error?: string;
   unpackedOnLoad: number;
-  responses: Array<{ status: number; body: string; unpacked: number }>;
+  responses: Array<{
+    status: number;
+    headers?: Record<string, string>;
+    body: string;
+    unpacked: number;
+  }>;
 };
 
 const runner = fileURLToPath(new URL('runner.js', import.meta.url));

@@ -89,3 +89,17 @@ test('a project that already split its image service keeps the split', () => {
   };
   assert.equal(configOverrides({ image: { service } }).image, undefined);
 });
+
+test('a project without a cache provider gets the bunny.net CDN provider, with its site', () => {
+  const cache = configOverrides({ site: 'https://www.example.com' }).cache;
+  assert.equal(cache?.provider?.name, 'bunny.net CDN');
+  assert.match(String(cache?.provider?.entrypoint), /bunny-cdn\.ts$/);
+  assert.deepEqual(cache?.provider?.config, { site: 'https://www.example.com' });
+});
+
+test('a project with its own cache provider keeps it', () => {
+  const overrides = configOverrides({
+    cache: { provider: { entrypoint: 'astro/cache/memory' } },
+  });
+  assert.equal(overrides.cache, undefined);
+});

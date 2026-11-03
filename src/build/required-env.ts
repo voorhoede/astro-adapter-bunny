@@ -6,6 +6,7 @@ const STORAGE: EnvEntry[] = [
   { name: 'BUNNY_STORAGE_ZONE' },
   { name: 'BUNNY_STORAGE_HOST' },
   { name: 'BUNNY_STORAGE_KEY', secret: true },
+  { name: 'BUNNY_API_KEY', secret: true, optional: true },
 ];
 
 export function requiredEnv(schema: AstroConfig['env']['schema'] | undefined): EnvEntry[] {
