@@ -17,6 +17,9 @@ export default defineConfig({
     {
       name: 'late-files',
       hooks: {
+        'astro:config:setup': ({ injectRoute }) => {
+          injectRoute({ pattern: '/injected', entrypoint: './src/injected.ts' });
+        },
         'astro:build:done': async ({ dir }) => {
           await writeFile(new URL('late-root.txt', dir), 'written after the build');
           await writeFile(new URL('docs/late.txt', dir), 'written after the build');
@@ -24,6 +27,7 @@ export default defineConfig({
       },
     },
   ],
+  image: { remotePatterns: [{ protocol: 'https', hostname: 'docs.astro.build' }] },
   redirects: {
     '/old': '/about',
     '/old-blog/[slug]': '/blog/[slug]',
@@ -31,6 +35,8 @@ export default defineConfig({
   },
   env: {
     schema: {
+      PUBLIC_SERVER_VALUE: envField.string({ context: 'server', access: 'public', default: 'server-default' }),
+      PUBLIC_CLIENT_VALUE: envField.string({ context: 'client', access: 'public', default: 'client-default' }),
       SECRET_MESSAGE: envField.string({ context: 'server', access: 'secret', optional: true }),
     },
   },
