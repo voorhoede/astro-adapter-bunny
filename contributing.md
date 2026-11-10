@@ -22,14 +22,8 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 
 | Module | What it does |
 | --- | --- |
-| `src/routing` | What a request becomes: render, redirect, or a stored file with what to do when storage has none. Pure, no Astro or bunny.net imports. |
-| `src/caching` | `finalize`, which gives every response its `Cache-Control` and applies `_headers` to stored files, and the bunny.net CDN cache provider. |
-| `src/runtime` | The request handlers both script types share, `platform` (the only module that reads bunny.net globals) and `storage` (Storage API reads). |
-| `src/scripts` | The two server entries, `middleware` and `standalone`, which register with bunny.net through `@bunny.net/edgescript-sdk`. |
-| `src/build` | The Astro integration: config overrides, the `_headers` and `_redirects` parsers, `bundle` (one Rolldown pass to `dist/index.js`), the size check and `.bunny/build.json`. |
-| `src/preview` | `astro preview`: the built script behind a local stand-in for the pull zone. |
-
-A request is decided by `routing.decide` as data, and each script type only interprets that decision with its own I/O, so routing rules are tested as tables without a runtime.
+| `src/index.ts` | The Astro integration: config overrides and one Rolldown pass that bundles the server into `dist/index.js`. |
+| `src/script.ts` | The Edge Script: renders on-demand routes and lets the pull zone serve stored files. |
 
 ## Tests
 

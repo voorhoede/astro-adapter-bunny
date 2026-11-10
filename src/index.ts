@@ -4,13 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rolldown } from 'rolldown';
 
-export default function bunny({
-  script = 'standalone',
-}: {
-  script?: 'standalone' | 'middleware';
-} = {}): AstroIntegration {
+export default function bunny(): AstroIntegration {
   let config: AstroConfig;
-  const serverEntrypoint = `astro-adapter-bunny/runtime/${script}.ts`;
 
   return {
     name: 'astro-adapter-bunny',
@@ -33,7 +28,7 @@ export default function bunny({
         setAdapter({
           name: 'astro-adapter-bunny',
           entrypointResolution: 'auto',
-          serverEntrypoint,
+          serverEntrypoint: 'astro-adapter-bunny/script.ts',
           adapterFeatures: {},
           supportedAstroFeatures: {
             staticOutput: 'stable',

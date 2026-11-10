@@ -5,9 +5,7 @@ import bunny from 'astro-adapter-bunny';
 // https://astro.build/config
 export default defineConfig({
   output: 'server',
-  adapter: bunny({
-    script: process.env.BUNNY_SCRIPT === 'middleware' ? 'middleware' : 'standalone',
-  }),
+  adapter: bunny(),
   redirects: {
     '/old': '/about',
     '/old-blog/[slug]': '/blog/[slug]',

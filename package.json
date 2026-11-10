@@ -2,7 +2,7 @@
   "name": "astro-adapter-bunny",
   "version": "0.0.0",
   "private": true,
-  "description": "Astro adapter for bunny.net Edge Scripting, as a standalone or middleware script.",
+  "description": "Astro adapter for bunny.net Edge Scripting.",
   "license": "ISC",
   "author": "De Voorhoede",
   "repository": {
@@ -12,7 +12,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./runtime/*": "./src/runtime/*"
+    "./script.ts": "./src/script.ts"
   },
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
