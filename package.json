@@ -4,6 +4,7 @@
   "private": true,
   "description": "Astro adapter for bunny.net Edge Scripting, as a standalone or middleware script.",
   "license": "ISC",
+  "author": "De Voorhoede",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voorhoede/astro-adapter-bunny.git"
