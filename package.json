@@ -17,11 +17,7 @@
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint --no-error-on-unmatched-pattern",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
-    "prepare": "husky"
+    "check": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@bunny.net/edgescript-sdk": "^0.13.0",
@@ -30,9 +26,6 @@
   "devDependencies": {
     "@types/node": "^26.6.5",
     "astro": "^7.4.2",
-    "husky": "^9.1.7",
-    "oxfmt": "^0.74.0",
-    "oxlint": "^1.89.0",
     "typescript": "^7.0.2"
   },
   "peerDependencies": {

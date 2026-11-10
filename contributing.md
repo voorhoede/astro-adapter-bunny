@@ -8,7 +8,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` runs formatting, lint, the type check and the tests. The pre-commit hook in `.husky/` runs the same before every commit.
+`npm run check` runs the type check and the tests.
 
 Add an entry under `[Unreleased]` in [`changelog.md`](changelog.md) for every change a user of the package would notice.
 
