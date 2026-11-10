@@ -1,0 +1,6 @@
+---
+const visits = Number(Astro.cookies.get('visits')?.value ?? 0) + 1;
+Astro.cookies.set('visits', String(visits), { path: '/', httpOnly: true });
+---
+
+<h1>Visits: {visits}</h1>

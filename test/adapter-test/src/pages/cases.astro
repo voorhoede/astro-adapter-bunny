@@ -1,0 +1,44 @@
+---
+export const prerender = true;
+
+const cases = [
+  ['/', 'On-demand page'],
+  ['/about', 'Prerendered page'],
+  ['/about/', 'Prerendered page, trailing slash'],
+  ['/feed.xml', 'Prerendered endpoint'],
+  ['/api/time.json', 'On-demand endpoint'],
+  ['/request.json', 'Request as Astro sees it'],
+  ['/blog/a', 'Prerendered dynamic route'],
+  ['/blog/c', 'Prerendered dynamic route, path not built'],
+  ['/products/42', 'On-demand dynamic route'],
+  ['/docs/intro', 'On-demand catch-all route'],
+  ['/docs/guide.txt', 'Public file under a catch-all route'],
+  ['/cookies', 'Cookies'],
+  ['/headers', 'Custom response headers'],
+  ['/images', 'Image, prerendered'],
+  ['/images-live', 'Image, on demand'],
+  ['/island', 'Server island'],
+  ['/env', 'Secret from astro:env'],
+  ['/old', 'Redirect from config'],
+  ['/old-blog/a', 'Dynamic redirect from config'],
+  ['/old-products/42', 'Redirect from config to an on-demand route'],
+  ['/go', 'Redirect from an on-demand page'],
+  ['/api/go', 'Redirect from an on-demand endpoint'],
+  ['/missing', 'Custom 404 page'],
+  ['/throws', 'Custom 500 page'],
+  ['/favicon.svg', 'Public file'],
+  ['/CNAME', 'Public file without extension'],
+  ['/.well-known/security.txt', 'Public file in a dot folder'],
+  ['/_headers', 'Reserved path'],
+  ['/_redirects', 'Reserved path'],
+];
+---
+
+<h1>Cases</h1>
+<ul>
+  {cases.map(([href, label]) => <li><a href={href}>{label}</a> <code>{href}</code></li>)}
+</ul>
+<form method="post" action="/api/echo">
+  <input name="message" value="hello" />
+  <button>POST to an on-demand endpoint</button>
+</form>

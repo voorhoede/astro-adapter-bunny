@@ -1,0 +1,10 @@
+---
+import ServerTime from '../components/ServerTime.astro';
+
+export const prerender = true;
+---
+
+<h1>Server island</h1>
+<ServerTime server:defer>
+  <p slot="fallback">Loading…</p>
+</ServerTime>
