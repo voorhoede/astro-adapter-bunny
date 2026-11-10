@@ -40,11 +40,15 @@ export default function bunny(): AstroIntegration {
           },
         });
       },
-      'astro:build:setup': ({ vite }) => {
-        vite.ssr ||= {};
-        vite.ssr.noExternal = true;
-        vite.ssr.resolve ||= {};
-        vite.ssr.resolve.conditions = ['deno', 'module', 'node', 'development|production'];
+      'astro:build:setup': ({ updateConfig }) => {
+        updateConfig({
+          ssr: {
+            noExternal: true,
+            resolve: {
+              conditions: ['deno', 'module', 'node', 'development|production'],
+            },
+          },
+        });
       },
       'astro:build:done': async () => {
         const outFile = join(fileURLToPath(config.outDir), 'index.js');
