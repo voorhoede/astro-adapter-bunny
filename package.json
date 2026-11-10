@@ -9,6 +9,10 @@
     "url": "git+https://github.com/voorhoede/astro-adapter-bunny.git"
   },
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime/*": "./src/runtime/*"
+  },
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
