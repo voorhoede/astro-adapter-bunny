@@ -1,5 +1,5 @@
 ---
-status: accepted; open (serving a static site without a script on bunny.net)
+status: accepted
 date: 2026-10-28, rewritten 2026-11-13
 ---
 
@@ -37,4 +37,4 @@ The third. The adapter passes Astro's `buildOutput` back with `preserveBuildClie
 
 ### Confirmation
 
-The three builds above, and the test app, which still writes `dist/index.js`. A static site has not yet been served live through a pull zone without a script.
+The three builds above, and the test app, which still writes `dist/index.js`. On bunny.net on 2026-11-13, a fully static build served through a pull zone on the storage zone, without a script, answered every page with `max-age=25600000` and bunny.net's own 404 page. With the settings in the cache decision for static sites, it answered as a site with a script does, and a re-uploaded file showed without a purge.

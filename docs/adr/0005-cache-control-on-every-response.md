@@ -38,6 +38,7 @@ The third.
 - **The pull zone must have** Smart Cache off, cache expiration set to respect the origin, query strings not ignored, and cookies not disabled.
 - **No rule for cookies or errors.** bunny.net does not cache a response that sets a cookie, and does not cache error responses unless the zone is told to. A site that turns `CacheErrorResponses` on chooses to cache errors.
 - **No cache provider.** `routeRules` and `Astro.cache` do nothing at the CDN; a page sets its own `Cache-Control` instead.
+- **A static site without a script** gets the same headers from two pull zone edge rules: URL `*/_astro/*` sets `Cache-Control: public, max-age=31536000, immutable`, and any other URL sets `public, max-age=0, must-revalidate`. Its storage zone sets `Custom404FilePath` to `/404.html`. Without them, storage answered every file with `max-age=25600000` and bunny.net's own 404 page (2026-11-13). Path rules are enough there, since every response is a stored file.
 
 ### Consequences
 
@@ -45,7 +46,7 @@ The third.
 - Good: hashed assets are cached for a year, and a deploy shows other files at once.
 - Bad: every stored file other than hashed assets revalidates at storage on every request.
 - Bad: a page that sets a `public` header and varies by cookie is served to the wrong visitor, since the zone ignores `Vary`.
-- Bad: correctness depends on four pull zone settings the adapter cannot set.
+- Bad: correctness depends on four pull zone settings the adapter cannot set, and for a static site on two edge rules and a storage zone setting as well.
 - Open: a cache provider, and invalidating by tag.
 
 ### Confirmation
