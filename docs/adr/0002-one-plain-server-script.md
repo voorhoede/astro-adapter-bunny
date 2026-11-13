@@ -19,7 +19,7 @@ bunny.net documents a 10 MB script limit and a 500 ms startup limit (docs.bunny.
 
 ## Decision outcome
 
-A second pass. In `astro:build:done`, `src/index.ts` runs Rolldown over Astro's server entry with code splitting off and writes `dist/index.js`. Every dynamic `import()` becomes part of the same file.
+A second pass. In `astro:build:done`, when Astro built a server, the adapter runs Rolldown over Astro's server entry with code splitting off and writes `dist/index.js`. Every dynamic `import()` becomes part of the same file.
 
 - **No minify and no source map**, to keep the build simple.
 - **Everything is bundled** (`ssr.noExternal: true`), and Rolldown runs with `platform: 'node'`, so Node builtins stay external imports.

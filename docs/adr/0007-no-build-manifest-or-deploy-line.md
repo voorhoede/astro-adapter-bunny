@@ -16,11 +16,11 @@ Astro encrypts the props of a server island with a key made per build. On 2026-1
 ## Considered options
 
 - **A manifest and a deploy line**, read and written by deploy tooling.
-- **Neither: the build writes only `dist/index.js` and `dist/client`.**
+- **Neither: the build writes only `dist/client`, plus `dist/index.js` when the site has a server.**
 
 ## Decision outcome
 
-Neither. The script reads stored files from the root of the storage zone, and a release is one upload of `dist/client` plus one publish of `dist/index.js` from the same build. The deploy tooling owns the pull zone settings, the purge after a release and `ASTRO_KEY`.
+Neither. The script reads stored files from the root of the storage zone, and a release is one upload of `dist/client` plus, when the build wrote one, one publish of `dist/index.js` from the same build. The deploy tooling owns the pull zone settings, the purge after a release and `ASTRO_KEY`.
 
 ### Consequences
 
@@ -30,4 +30,4 @@ Neither. The script reads stored files from the root of the storage zone, and a 
 
 ### Confirmation
 
-A build writes `dist/index.js` and `dist/client` and nothing else, and uploading both to a storage zone and an Edge Script serves the site.
+A build writes `dist/client`, Astro's own `dist/server`, and `dist/index.js` when there is a server, and nothing else. Uploading `dist/client` to a storage zone and `dist/index.js` to an Edge Script serves the site.

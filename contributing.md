@@ -22,8 +22,10 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 
 | Module | What it does |
 | --- | --- |
-| `src/index.ts` | The Astro integration: config overrides and one Rolldown pass that bundles the server into `dist/index.js`. |
+| `src/index.ts` | The Astro integration: config overrides, the build output, and bundling the server into `dist/index.js` when Astro built one. |
 | `src/script.ts` | The Edge Script: renders on-demand routes and lets the pull zone serve stored files. |
+| `src/lib/bundle-server.ts` | The Rolldown pass that turns Astro's server entry into one file. |
+| `src/lib/render-app.ts` | Renders a request with Astro, using the visitor's URL, and sets the default `Cache-Control`. |
 
 ## Tests
 
