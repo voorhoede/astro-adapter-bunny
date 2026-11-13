@@ -6,6 +6,7 @@ import { bundleServer } from "./lib/bundle-server.ts";
 
 export default function bunny(): AstroIntegration {
   let config: AstroConfig;
+  let hasServer: boolean;
 
   return {
     name: "astro-adapter-bunny",
@@ -22,14 +23,22 @@ export default function bunny(): AstroIntegration {
           },
         });
       },
-      "astro:config:done": ({ config: resolvedConfig, setAdapter }) => {
+      "astro:config:done": ({
+        config: resolvedConfig,
+        setAdapter,
+        buildOutput,
+      }) => {
         config = resolvedConfig;
 
         setAdapter({
           name: "astro-adapter-bunny",
           entrypointResolution: "auto",
           serverEntrypoint: "astro-adapter-bunny/script.ts",
-          adapterFeatures: {},
+          adapterFeatures: {
+            buildOutput,
+            preserveBuildClientDir: true,
+            preserveBuildServerDir: true,
+          },
           supportedAstroFeatures: {
             staticOutput: "stable",
             hybridOutput: "stable",
@@ -50,15 +59,20 @@ export default function bunny(): AstroIntegration {
           },
         });
       },
+      "astro:build:ssr": () => {
+        hasServer = true;
+      },
       "astro:build:done": async () => {
-        const outFile = join(fileURLToPath(config.outDir), "index.js");
-        const serverLocation = fileURLToPath(config.build.server);
-        const serverEntryFile = config.build.serverEntry;
-        const bundledServerCode = await bundleServer(
-          serverLocation,
-          serverEntryFile,
-        );
-        await writeFile(outFile, bundledServerCode);
+        if (hasServer) {
+          const outFile = join(fileURLToPath(config.outDir), "index.js");
+          const serverLocation = fileURLToPath(config.build.server);
+          const serverEntryFile = config.build.serverEntry;
+          const bundledServerCode = await bundleServer(
+            serverLocation,
+            serverEntryFile,
+          );
+          await writeFile(outFile, bundledServerCode);
+        }
       },
     },
   };
