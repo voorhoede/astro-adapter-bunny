@@ -17,8 +17,13 @@ export async function renderApp(
 
   url.port = "";
 
+  const clientAddress =
+    request.headers.get("x-real-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+
   const response = await app.render(new Request(url, request), {
     addCookieHeader: true,
+    ...(clientAddress && { clientAddress }),
   });
 
   if (!response.headers.has("cache-control")) {
