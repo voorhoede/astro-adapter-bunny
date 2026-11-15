@@ -1,6 +1,11 @@
 import type { IntegrationResolvedRoute, RouteData } from "astro";
 
-export function printRedirects(routes: IntegrationResolvedRoute[]): string {
+export function printRedirects(
+  routes: IntegrationResolvedRoute[],
+  base: string,
+): string {
+  const prefix = base.replace(/\/$/, "");
+
   return routes
     .flatMap(({ type, redirect, redirectRoute, segments }) => {
       if (type !== "redirect" || !redirect) return [];
@@ -12,7 +17,8 @@ export function printRedirects(routes: IntegrationResolvedRoute[]): string {
         ? toPattern(redirectRoute.segments, ":splat")
         : destination;
 
-      return [`${toPattern(segments, "*")} ${target} ${status}`];
+      // Astro adds the base to the source only, so a target keeps the path it was given.
+      return [`${prefix}${toPattern(segments, "*")} ${target} ${status}`];
     })
     .join("\n");
 }

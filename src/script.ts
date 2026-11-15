@@ -6,6 +6,7 @@ import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.
 import { addDeployFolder, removeDeployFolder } from "./lib/deploy-folder.ts";
 
 const app = createApp();
+const assetsPath = `${app.manifest.base.replace(/\/$/, "")}/${app.manifest.assetsDir}/`;
 const hasPrerenderedNotFound = app.manifest.routes.some(
   ({ routeData }) => routeData.route === "/404" && routeData.prerender,
 );
@@ -58,7 +59,7 @@ BunnySDK.net.http
     }
 
     const { pathname } = new URL(request.url);
-    const cacheControl = pathname.startsWith(`/${app.manifest.assetsDir}/`)
+    const cacheControl = pathname.startsWith(assetsPath)
       ? "public, max-age=31536000, immutable"
       : "public, max-age=0, must-revalidate";
     response.headers.set("cache-control", cacheControl);

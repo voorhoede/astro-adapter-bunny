@@ -56,6 +56,7 @@ export async function writeBuildManifest(
     }),
     astroAdapterBunny: {
       trailingSlash: config.trailingSlash,
+      base: config.base,
       buildFormat: config.build.format,
       assetsDir: config.build.assets,
       ...(hasRedirects && { redirects: fromRoot(join(outDir, "_redirects")) }),

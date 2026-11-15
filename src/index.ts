@@ -74,7 +74,7 @@ export default function bunny(): AstroIntegration {
         hasServer = true;
       },
       "astro:build:done": async () => {
-        const redirects = printRedirects(routes);
+        const redirects = printRedirects(routes, config.base);
         if (redirects) {
           const redirectsFile = join(
             fileURLToPath(config.outDir),
