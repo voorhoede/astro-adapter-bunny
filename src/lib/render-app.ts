@@ -1,8 +1,10 @@
+import type { RouteData } from "astro";
 import type { BaseApp } from "astro/app";
 
 export async function renderApp(
   request: Request,
   app: BaseApp,
+  routeData?: RouteData,
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -24,6 +26,7 @@ export async function renderApp(
   const response = await app.render(new Request(url, request), {
     addCookieHeader: true,
     ...(clientAddress && { clientAddress }),
+    ...(routeData && { routeData }),
   });
 
   if (!response.headers.has("cache-control")) {

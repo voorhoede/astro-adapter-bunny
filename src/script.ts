@@ -8,6 +8,11 @@ const app = createApp();
 BunnySDK.net.http
   .servePullZone()
   .onOriginRequest(({ request }) => {
+    const routeData = app.match(request, true);
+    if (routeData?.type === "redirect") {
+      return renderApp(request, app, routeData);
+    }
+
     if (["GET", "HEAD"].includes(request.method)) {
       return serveStaticAsset(request, app);
     }

@@ -1,12 +1,18 @@
-import type { AstroConfig, AstroIntegration } from "astro";
+import type {
+  AstroConfig,
+  AstroIntegration,
+  IntegrationResolvedRoute,
+} from "astro";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundleServer } from "./lib/bundle-server.ts";
+import { printRedirects } from "./lib/print-redirects.ts";
 
 export default function bunny(): AstroIntegration {
   let config: AstroConfig;
   let hasServer: boolean;
+  let routes: IntegrationResolvedRoute[] = [];
 
   return {
     name: "astro-adapter-bunny",
@@ -15,6 +21,7 @@ export default function bunny(): AstroIntegration {
         config = userConfig;
 
         updateConfig({
+          build: { redirects: false },
           image: {
             service: {
               build: { entrypoint: "astro/assets/services/sharp" },
@@ -49,6 +56,9 @@ export default function bunny(): AstroIntegration {
           },
         });
       },
+      "astro:routes:resolved": ({ routes: resolvedRoutes }) => {
+        routes = resolvedRoutes;
+      },
       "astro:build:setup": ({ updateConfig }) => {
         updateConfig({
           ssr: {
@@ -63,6 +73,15 @@ export default function bunny(): AstroIntegration {
         hasServer = true;
       },
       "astro:build:done": async () => {
+        const redirects = printRedirects(routes);
+        if (redirects) {
+          const redirectsFile = join(
+            fileURLToPath(config.outDir),
+            "_redirects",
+          );
+          await writeFile(redirectsFile, `${redirects}\n`);
+        }
+
         if (hasServer) {
           const outFile = join(fileURLToPath(config.outDir), "index.js");
           const serverLocation = fileURLToPath(config.build.server);
