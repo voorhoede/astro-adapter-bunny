@@ -2,15 +2,13 @@
 
 What a deploy tool has to do to publish a site built with this adapter. The adapter only builds; everything below happens outside the build.
 
-Status: the redirects file is planned and not written by the adapter yet. Everything else describes the current build.
-
 ## Build output
 
 | Path | When | What it is |
 | --- | --- | --- |
 | `dist/client/` | always | Every file the site serves: prerendered pages, `public/` files and `/_astro/*` assets. |
 | `dist/index.js` | only when the site has a server | The Edge Script, one plain ES module. A fully static site has none. |
-| `dist/_redirects` | when the project has `redirects` (planned) | Astro's redirects in the `_redirects` format, outside `dist/client` so it is not uploaded. |
+| `dist/_redirects` | when the project has `redirects` | Astro's redirects in the `_redirects` format, outside `dist/client` so it is not uploaded. |
 | `dist/server/` | sometimes | Astro's own server build. Not deployed. |
 
 A custom `outDir` replaces `dist`.
@@ -59,7 +57,7 @@ A site with a script must not get these rules: the script sets `Cache-Control` i
 
 ## Redirects
 
-The adapter will set `build.redirects: false`, so Astro writes no meta refresh pages, and the deploy tool turns `dist/_redirects` into edge rules. Without them, a redirect answers 404. Each line has a source, a target and a status:
+The adapter sets `build.redirects: false`, so Astro writes no meta refresh pages, and writes Astro's `redirects` to `dist/_redirects`. On a site with a script, the script answers these redirects itself with a real 301 or 308, so edge rules are optional there: they answer before the script runs. A static site has no script, so without edge rules its redirects answer 404. Each line has a source, a target and a status:
 
 ```
 /old /about 301
