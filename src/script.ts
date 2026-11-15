@@ -2,12 +2,17 @@ import { createApp } from "astro/app/entrypoint";
 import * as BunnySDK from "@bunny.net/edgescript-sdk";
 import { serveStaticAsset } from "./lib/serve-static-asset.ts";
 import { renderApp } from "./lib/render-app.ts";
+import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
 
 const app = createApp();
 
 BunnySDK.net.http
   .servePullZone()
   .onOriginRequest(({ request }) => {
+    if (needsTrailingSlashRedirect(request, app)) {
+      return renderApp(request, app);
+    }
+
     const routeData = app.match(request, true);
     if (routeData?.type === "redirect") {
       return renderApp(request, app, routeData);
