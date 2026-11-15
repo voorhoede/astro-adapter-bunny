@@ -6,6 +6,9 @@ import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.
 import { addDeployFolder, removeDeployFolder } from "./lib/deploy-folder.ts";
 
 const app = createApp();
+const hasPrerenderedNotFound = app.manifest.routes.some(
+  ({ routeData }) => routeData.route === "/404" && routeData.prerender,
+);
 
 BunnySDK.net.http
   .servePullZone()
@@ -47,6 +50,10 @@ BunnySDK.net.http
     const { request } = removeDeployFolder(originRequest);
 
     if (response.status === 404) {
+      // The storage zone's Custom404FilePath answers with the prerendered 404 page, which Astro cannot render here.
+      if (hasPrerenderedNotFound && !app.match(request)) {
+        return Promise.resolve(response);
+      }
       return renderApp(request, app);
     }
 
