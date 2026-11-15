@@ -22,13 +22,32 @@ A custom `outDir` replaces `dist`.
 ## Release steps
 
 1. **Build** with a fixed `ASTRO_KEY` in the environment. Astro encrypts server island props with a key made per build; without a fixed key, a page cached from one release breaks the islands of the next.
-2. **Upload `dist/client`** to the root of the storage zone, keeping paths.
+2. **Upload `dist/client`** to `deploys/<id>/` in the storage zone, keeping paths. `<id>` names the release.
 3. **Publish `dist/index.js`** to the Edge Script, when it exists.
-4. **Remove stored files the build no longer has.** The script asks storage first for every GET and HEAD, so a file left over from an earlier build wins over an on-demand route on the same path, and stays publicly readable.
+4. **Point the pull zone at the release** with the deploy folder rules (see below).
 5. **Apply the redirects** as edge rules (see below).
 6. **Purge the pull zone.** A full zone purge took effect within 30 seconds. A tag purge against a script response had not taken effect after 5 minutes.
 
-Uploading before publishing means new hashed assets exist before a new script or page asks for them. Removing after publishing means the old release keeps working until the new one is live.
+Uploading before publishing means new hashed assets exist before a new script or page asks for them. A rollback publishes the earlier script and points the rule back at its folder, then purges; no file moves.
+
+A deploy to the root of the storage zone, without the folder rules, also works. Then every stored file is publicly readable, and the tool has to remove files the build no longer has: the script asks storage first for every GET and HEAD, so a file left over from an earlier build wins over an on-demand route on the same path.
+
+## Deploy folders
+
+Two edge rules serve one release and hide the others, the same way `bunny sites` does:
+
+| Rule | Trigger | Action |
+| --- | --- | --- |
+| Gate | URL `*/deploys/*` | Block request (`ActionType` 4) |
+| Origin | URL matches none of `*/deploys/*` | Origin storage (`ActionType` 17): `ActionParameter1` the storage zone id, `ActionParameter2` its name, `ActionParameter3` `/deploys/<id>`. Extra action: set request header (`ActionType` 6) `X-Bunny-Deploy` to `<id>`. |
+
+The rule puts the folder in front of the path before the script runs, so the script sees `/deploys/<id>/about`. When `X-Bunny-Deploy` is set and the path starts with its folder, the script strips the folder for routing, `Astro.url` and the cache rule, and adds it back for storage. Without the header the script uses the path as it is.
+
+Measured on bunny.net on 2026-11-15, on a pull zone with the middleware script:
+
+- A file came from the release folder, not from the root, and `/deploys/<id>/...` answered 403.
+- The test app passed its 56 checks under the rules, and a `build.format: 'file'` build its 32.
+- `ActionParameter3` with a trailing slash, `/deploys/<id>/`, made the script see `/deploys/<id>//about`.
 
 ## Pull zone settings
 
@@ -54,6 +73,16 @@ A site without `dist/index.js` has no script to set headers or answer 404s, so t
 Without these, storage answered every file with `max-age=25600000`, and a missing path with bunny.net's own 404 page. When `build.assets` is not `_astro`, use that folder name.
 
 A site with a script must not get these rules: the script sets `Cache-Control` itself.
+
+## Trailing slash
+
+With `trailingSlash` set to `'always'` or `'never'`, the script redirects a path in the wrong form with 301 (308 for other methods), as Astro does for the pages it renders. It skips `/`, internal paths such as `/_astro/...`, files with an extension for `'always'`, and the files of the build.
+
+A static site has no script. Edge rules can do part of it, measured on 2026-11-15:
+
+- `'always'`: a URL trigger `pattern:^https?://[^/]+/.*[^/]$` together with a second trigger in "match none" mode for `pattern:^https?://.*/[^/]+%.%w+$` and the build's files without an extension, redirecting to `https://%{Url.Hostname}%{Url.Directory}%{Url.FileName}/`. It drops the query string; every path variable (`%{Path.0-}`, `%{Url.Path}`, `%{Request.Path}`) includes it.
+- `'never'`: `pattern:^https?://[^/]+/.+/$` redirecting to `https://%{Url.Hostname}/%{Path.0-}` worked without a query string, but with one it redirected to the same URL, a loop. Do not use it until a rule can tell requests with a query apart.
+- A duplicate trailing slash, `pattern:^https?://[^/]+/.-//+$`, collapsed to one.
 
 ## Redirects
 
@@ -88,7 +117,7 @@ Measured on bunny.net on 2026-11-15:
 
 Limits:
 
-- A pull zone has at most 50 edge rules by default, and a static site already uses 2. bunny.net support can raise the limit.
+- A pull zone has at most 50 edge rules by default. The deploy folder rules take 2, and a static site's cache rules 2 more. bunny.net support can raise the limit.
 - A parameter has to be a whole path segment. A source like `/old-:id` cannot become `%{Path.N}`.
 
 Mark the rules the tool creates, for example by a fixed prefix in the description, and replace only those on every deploy. Leave rules the site owner added alone.

@@ -28,6 +28,9 @@ Measured on bunny.net between 2026-11-09 and 2026-11-10, with a storage zone in 
 
 Only middleware. `bunny()` takes no options, and `src/script.ts` registers two hooks through `@bunny.net/edgescript-sdk`:
 
+- **A deploy folder** that an edge rule puts in front of the path, named in `X-Bunny-Deploy`, is stripped before anything else and added back for storage.
+- **A path in the wrong trailing slash form** is rendered by Astro, which redirects it, before storage is asked.
+- **A redirect route** is rendered by Astro, which answers 301 or 308.
 - **A GET or HEAD** goes to the pull zone, so storage is asked first. A 404 from storage is rendered by Astro in the response hook: the on-demand route if one matches, otherwise its own 404 page.
 - **Any other method** is rendered by Astro in the request hook when an on-demand route matches, since the pull zone consumes the body on its way to storage. On a stored file or a prerendered route it answers 405 with `Allow: GET, HEAD`, as storage itself does. Any other path renders Astro's 404 page. No request body reaches storage.
 - **The visitor's URL** is rebuilt before rendering: the host from `host`, the protocol from the first value of `x-forwarded-proto`, and no port. Without it, Astro's origin check refused every POST from a browser with 403, and `Astro.url` and absolute redirects pointed at storage.

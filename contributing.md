@@ -26,6 +26,8 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 | `src/script.ts` | The Edge Script: asks storage first for GET and HEAD and renders on a 404, renders other methods directly. |
 | `src/lib/bundle-server.ts` | The Rolldown pass that turns Astro's server entry into one file. |
 | `src/lib/render-app.ts` | Renders a request with Astro, with the visitor's URL and address, and sets `private, no-store` when the response has no `Cache-Control`. |
+| `src/lib/deploy-folder.ts` | Strips the deploy folder an edge rule puts in front of the path, and adds it back for storage. |
+| `src/lib/needs-trailing-slash-redirect.ts` | Tells whether a path needs Astro's trailing slash redirect before it goes to storage. |
 | `src/lib/print-redirects.ts` | Writes Astro's `redirects` in the `_redirects` format for `dist/_redirects`. |
 | `src/lib/serve-static-asset.ts` | Rewrites a request for a prerendered page to its `.html` file with `build.format` `'file'` or `'preserve'`. |
 

@@ -9,23 +9,25 @@ date: 2026-10-28, rewritten 2026-11-15
 
 The adapter does not deploy. A deploy uploads `dist/client` to the storage zone and publishes `dist/index.js` as the Edge Script. Deploy tools for bunny.net can read a build manifest such as `.bunny/build.json`, and can prepend a line to the script that names a folder in storage per release, so code and files roll back together. Script variables are not part of a release, so such a folder cannot live in one.
 
-Measured on bunny.net in October 2026: 128 variables per script (129 breaks startup) and 2 KB per value at runtime; the API refuses values over 4,096 characters, and about 242 to 254 KB of values in total answers 431. A full zone purge took effect within 30 s (2026-11-03).
+Measured on bunny.net in October 2026: 128 variables per script (129 breaks startup) and 2 KB per value at runtime; the API refuses values over 4,096 characters, and about 242 to 254 KB of values in total answers 431. A full zone purge took effect within 30 s (2026-11-03). On 2026-11-15 two edge rules served a release from `deploys/<id>` in storage and blocked direct requests for `/deploys/*` with 403, without a line in the script.
 
 Astro encrypts the props of a server island with a key made per build. On 2026-11-09 a page cached from one build sent props a script from another build could not read, and the island answered 400. A fixed `ASTRO_KEY` in the build environment keeps the key across builds.
 
 ## Considered options
 
 - **A manifest and a deploy line**, read and written by deploy tooling.
+- **Deploy folders through edge rules**, which need nothing in the script but stripping the folder.
 - **Neither: the build writes `dist/client`, plus `dist/index.js` when the site has a server and `dist/_redirects` when it has redirects.**
 
 ## Decision outcome
 
-Neither. The script reads stored files from the root of the storage zone, and a release is one upload of `dist/client` plus, when the build wrote one, one publish of `dist/index.js` from the same build. The deploy tooling owns the pull zone settings, the edge rules for `dist/_redirects`, the purge after a release and `ASTRO_KEY`.
+No manifest and no deploy line. A release is one upload of `dist/client` to `deploys/<id>` plus, when the build wrote one, one publish of `dist/index.js` from the same build, and an edge rule that points the pull zone at that folder. A deploy to the root without the rule still works. The deploy tooling owns the pull zone settings and edge rules, the purge after a release and `ASTRO_KEY`.
 
 ### Consequences
 
 - Good: nothing for a deploy tool to parse, and nothing to prepend.
-- Bad: files and code do not roll back together, and files from an earlier build stay readable until they are overwritten or removed.
+- Good: with deploy folders, files and code roll back together, and earlier releases cannot be requested.
+- Bad: a deploy to the root has neither, and files from an earlier build stay readable until they are overwritten or removed.
 - Bad: a deploy tool must know the pull zone settings and variables from documentation, not from the build.
 
 ### Confirmation
