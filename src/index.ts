@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundleServer } from "./lib/bundle-server.ts";
 import { printRedirects } from "./lib/print-redirects.ts";
+import { writeBuildManifest } from "./lib/write-build-manifest.ts";
 
 export default function bunny(): AstroIntegration {
   let config: AstroConfig;
@@ -92,6 +93,11 @@ export default function bunny(): AstroIntegration {
           );
           await writeFile(outFile, bundledServerCode);
         }
+
+        await writeBuildManifest(config, {
+          hasServer: Boolean(hasServer),
+          hasRedirects: Boolean(redirects),
+        });
       },
     },
   };
