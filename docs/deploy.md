@@ -60,7 +60,7 @@ These rules and settings serve one release and hide the others, for sites with a
 | Gate rule | URL `*/deploys/*` | Block request (`ActionType` 4). |
 | State rule | URL `*/_bunny/*` | Block request, when the tool keeps its own state in storage under `_bunny/`. |
 | Rewrite rule | URL matches none of `*/deploys/*` | Origin storage (`ActionType` 17): `ActionParameter1` the storage zone id, `ActionParameter2` its name, `ActionParameter3` `/deploys/<id>`. Extra action: set request header (`ActionType` 6) `X-Bunny-Deploy` to `<id>`. |
-| Storage zone 404 | | `Custom404FilePath` set to `/deploys/<id>/404.html` when the build has a `404.html`, else empty; `Rewrite404To200` off. |
+| Storage zone 404 | | `Custom404FilePath` set to `/deploys/<id>/404.html` when the build has a `404.html`, else empty; `Rewrite404To200` off. A site with a script needs it too when `404.astro` is prerendered: the script passes this page on for a path no route answers. |
 
 The rewrite rule puts the folder in front of the path before the script runs, so the script sees `/deploys/<id>/about`. When `X-Bunny-Deploy` is set and the path starts with its folder, the script strips the folder for routing, `Astro.url` and the cache rule, and adds it back for storage. Without the header the script uses the path as it is, or the folder bunny.net's CLI names in `globalThis.__BUNNY_DEPLOY__.assetPrefix`, which it adds for storage itself.
 
@@ -71,7 +71,7 @@ Measured on bunny.net on 2026-11-15, on a pull zone with the middleware script:
 - `ActionParameter3` with a trailing slash, `/deploys/<id>/`, made the script see `/deploys/<id>//about`.
 - With the files in `deploys/<id>/`, no rules, and a `__BUNNY_DEPLOY__` line put at the top of the script, the test app passed its 56 checks.
 
-Untested: the storage zone 404 page together with the script, and these rules on a site without a script.
+Untested: these rules on a site without a script. The storage zone 404 page with the script was measured from the root, not from a deploy folder.
 
 ## Pull zone settings
 
