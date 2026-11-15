@@ -3,12 +3,15 @@ import * as BunnySDK from "@bunny.net/edgescript-sdk";
 import { serveStaticAsset } from "./lib/serve-static-asset.ts";
 import { renderApp } from "./lib/render-app.ts";
 import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
+import { addDeployFolder, removeDeployFolder } from "./lib/deploy-folder.ts";
 
 const app = createApp();
 
 BunnySDK.net.http
   .servePullZone()
-  .onOriginRequest(({ request }) => {
+  .onOriginRequest(({ request: originRequest }) => {
+    const { request, folder } = removeDeployFolder(originRequest);
+
     if (needsTrailingSlashRedirect(request, app)) {
       return renderApp(request, app);
     }
@@ -19,7 +22,9 @@ BunnySDK.net.http
     }
 
     if (["GET", "HEAD"].includes(request.method)) {
-      return serveStaticAsset(request, app);
+      return serveStaticAsset(request, app).then<Request>((storageRequest) =>
+        addDeployFolder(storageRequest, folder),
+      );
     }
 
     if (app.match(request)) {
@@ -38,7 +43,9 @@ BunnySDK.net.http
 
     return renderApp(request, app);
   })
-  .onOriginResponse(({ request, response }) => {
+  .onOriginResponse(({ request: originRequest, response }) => {
+    const { request } = removeDeployFolder(originRequest);
+
     if (response.status === 404) {
       return renderApp(request, app);
     }
