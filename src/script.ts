@@ -1,5 +1,6 @@
 import { createApp } from "astro/app/entrypoint";
 import * as BunnySDK from "@bunny.net/edgescript-sdk";
+import { serveStaticAsset } from "./lib/serve-static-asset.ts";
 import { renderApp } from "./lib/render-app.ts";
 
 const app = createApp();
@@ -7,15 +8,21 @@ const app = createApp();
 BunnySDK.net.http
   .servePullZone()
   .onOriginRequest(({ request }) => {
-    const routeData = app.match(request);
+    if (["GET", "HEAD"].includes(request.method)) {
+      return serveStaticAsset(request, app);
+    }
 
-    if (!routeData) {
-      if (["GET", "HEAD"].includes(request.method)) {
-        return Promise.resolve(request);
-      }
+    if (app.match(request)) {
+      return renderApp(request, app);
+    }
 
+    const { pathname } = new URL(request.url);
+    if (
+      app.match(request, true)?.prerender ||
+      app.manifest.assets.has(pathname)
+    ) {
       return Promise.resolve(
-        new Request(request.url, { headers: request.headers }),
+        new Response(null, { status: 405, headers: { allow: "GET, HEAD" } }),
       );
     }
 
@@ -27,8 +34,7 @@ BunnySDK.net.http
     }
 
     const { pathname } = new URL(request.url);
-    const { assetsDir } = app.manifest;
-    const cacheControl = pathname.startsWith(`/${assetsDir}/`)
+    const cacheControl = pathname.startsWith(`/${app.manifest.assetsDir}/`)
       ? "public, max-age=31536000, immutable"
       : "public, max-age=0, must-revalidate";
     response.headers.set("cache-control", cacheControl);
