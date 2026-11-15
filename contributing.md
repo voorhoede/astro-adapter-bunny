@@ -16,7 +16,7 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 
 ## General Prerequisites
 - Node.js, the version in [`.node-version`](.node-version).
-- [Deno](https://deno.com/), for the tests that run a built script the way bunny.net does. CI uses 2.7.12, the version bunny.net reports.
+- The [bunny CLI](https://bunny.net/docs/cli), logged in, for the live checks.
 
 ## How the code is organized
 
@@ -34,11 +34,27 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 
 ## Tests
 
-- **Unit tests** sit next to the code as `src/<module>/<name>.test.ts`, and run on Node with `node:test`.
-- **Build tests** build `test/app` and the fixtures in `test/fixtures/` with Astro, and check what lands in `dist` and `.bunny/build.json`.
-- **Runtime tests** run the built `dist/index.js` under Deno through `test/harness/`, with a stub for the `Bunny` global, a fake Storage API and the same pull zone stand-in `astro preview` uses.
+The adapter is checked on bunny.net itself, by `test/live/`. Each suite builds a variant of `test/adapter-test`, uploads it, publishes the script, and checks the responses with `curl`:
 
-Write the test first and agree on the expected result before the code. A bug fix gets a test that fails before the fix.
+```sh
+cp test/live/.env.example test/live/.env   # fill in the test zones and script
+test/live/run.sh                           # every suite
+test/live/run.sh regress formats           # some suites
+```
+
+| Suite | What it covers |
+| --- | --- |
+| `regress` | The test app from the zone root: rendering, files, cache headers, redirects, cookies, actions, i18n, `Astro.clientAddress` |
+| `folder` | The same app from a deploy folder behind the edge rules |
+| `formats` | `build.format` `'file'` and `'preserve'` |
+| `trailing` | `trailingSlash` `'always'` and `'never'` |
+| `errors` | A prerendered `404.astro` through `Custom404FilePath` |
+| `manifest` | `.bunny/build.json` and `dist/_redirects`, without a deploy |
+| `base` | `base: '/docs'`, from the root and from a deploy folder |
+
+Builds and downloads land in `test/live/.work`, which git ignores. A run leaves the zone on the test app, from the root, without edge rules.
+
+Write the check first and agree on the expected result before the code. A bug fix gets a check that fails before the fix.
 
 ## Checks on bunny.net
 

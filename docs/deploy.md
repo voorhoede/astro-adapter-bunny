@@ -41,7 +41,7 @@ Paths are relative to the project root and use forward slashes. bunny.net's cont
 ## Release steps
 
 1. **Build** with a fixed `ASTRO_KEY` in the environment. Astro encrypts server island props with a key made per build; without a fixed key, a page cached from one release breaks the islands of the next.
-2. **Upload `dist/client`** to `deploys/<id>/` in the storage zone, keeping paths. `<id>` names the release.
+2. **Upload `dist/client`** to `deploys/<id>/` in the storage zone, keeping paths, and under the site's `base` when it has one (see below). `<id>` names the release.
 3. **Publish `dist/index.js`** to the Edge Script, when it exists.
 4. **Point the pull zone at the release** with the deploy folder rules (see below).
 5. **Apply the redirects** as edge rules (see below).
@@ -99,6 +99,17 @@ A site without `dist/index.js` has no script to set headers or answer 404s, so t
 Without settings, storage answered every file with `max-age=25600000`, and a missing path with bunny.net's own 404 page. Measured earlier without deploy folders: the `*/_astro/*` rule above, a second rule setting `public, max-age=0, must-revalidate` on every other URL, and `Custom404FilePath: /404.html` made a static site answer as a site with a script does.
 
 A site with a script must not get the cache override or these rules: the script sets `Cache-Control` itself.
+
+## Base
+
+With `base: '/docs'`, Astro writes `dist/client` without the `docs` folder, but every URL the site links to starts with `/docs/`. Upload `dist/client` to `deploys/<id>/docs/`, or to `docs/` without deploy folders, so stored paths match the URLs; the script then strips nothing for storage, and a static site needs no rule for it. The manifest names the base in `astroAdapterBunny.base`.
+
+- `Custom404FilePath` becomes `/deploys/<id>/docs/404.html`.
+- A static site's asset rule matches `*/docs/_astro/*`.
+- A path outside the base finds nothing in storage and answers the 404 page.
+- `dist/_redirects` puts the base in front of each source. Astro answers a redirect with the target as written, without the base, and so does an edge rule made from the file.
+
+Measured on bunny.net on 2026-11-15: a build with `base: '/docs'` uploaded under `docs/` passed 14 checks, from the root and from a deploy folder.
 
 ## Trailing slash
 
