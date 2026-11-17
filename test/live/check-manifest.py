@@ -27,13 +27,13 @@ if mode == "ssr":
     c("env secret", {"name": "SECRET_MESSAGE", "reason": "astro:env secret", "secret": True, "optional": True} in env)
     c("env no public", not any(e["name"].startswith("PUBLIC_") for e in env))
     c("dev", m.get("dev") == {"command": "astro dev"})
-    c("extras", x == {"base": "/", "trailingSlash": "ignore", "buildFormat": "directory", "assetsDir": "_astro", "redirects": "dist/_redirects", "deployFolderHeader": "X-Bunny-Deploy"})
+    c("extras", x == {"base": "/", "trailingSlash": "ignore", "buildFormat": "directory", "assetsDir": "_astro", "redirects": "dist/client/_redirects", "headers": "dist/client/_headers", "deployFolderHeader": "X-Bunny-Deploy"})
 elif mode.startswith("static"):
     out = "dist"
     c("kind", m.get("kind") == "static")
     c("no script", "script" not in m)
     c("no requires", "requires" not in m)
-    if mode == "static-redirects": c("redirects", x.get("redirects") == "dist/_redirects")
+    if mode == "static-redirects": c("redirects", x.get("redirects") == "dist/client/_redirects")
     else: c("no redirects", "redirects" not in x)
 elif mode == "outdir":
     out = "build"

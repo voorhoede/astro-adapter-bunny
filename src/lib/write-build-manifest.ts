@@ -7,7 +7,11 @@ import { fileURLToPath } from "node:url";
 // The shape bunny.net's CLI reads from `.bunny/build.json`; our own fields live under one key it ignores.
 export async function writeBuildManifest(
   config: AstroConfig,
-  { hasServer, hasRedirects }: { hasServer: boolean; hasRedirects: boolean },
+  {
+    hasServer,
+    hasRedirects,
+    hasHeaders,
+  }: { hasServer: boolean; hasRedirects: boolean; hasHeaders: boolean },
 ): Promise<void> {
   const root = fileURLToPath(config.root);
   const outDir = fileURLToPath(config.outDir);
@@ -20,6 +24,7 @@ export async function writeBuildManifest(
     createRequire(join(root, "package.json")).resolve("astro/package.json"),
   );
 
+  const clientDir = fileURLToPath(config.build.client);
   const scriptFile = join(outDir, "index.js");
   const server = hasServer && {
     script: {
@@ -46,7 +51,7 @@ export async function writeBuildManifest(
     framework: { name: "astro", version: astro.version },
     kind: hasServer ? "ssr" : "static",
     ...server,
-    assets: { dir: fromRoot(fileURLToPath(config.build.client)) },
+    assets: { dir: fromRoot(clientDir) },
     ...(hasServer && {
       requires: {
         pullZone: { disableCookies: false, enableSmartCache: false },
@@ -59,7 +64,10 @@ export async function writeBuildManifest(
       base: config.base,
       buildFormat: config.build.format,
       assetsDir: config.build.assets,
-      ...(hasRedirects && { redirects: fromRoot(join(outDir, "_redirects")) }),
+      ...(hasRedirects && {
+        redirects: fromRoot(join(clientDir, "_redirects")),
+      }),
+      ...(hasHeaders && { headers: fromRoot(join(clientDir, "_headers")) }),
       deployFolderHeader: "X-Bunny-Deploy",
     },
   };

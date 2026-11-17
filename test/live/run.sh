@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Live checks against throwaway bunny.net resources (see test/live/.env.example).
-# usage: test/live/run.sh [regress|folder|formats|trailing|errors|manifest|base]...  (no argument runs all)
+# usage: test/live/run.sh [regress|folder|formats|trailing|errors|manifest|base|csp]...  (no argument runs all)
 source ${0:A:h}/lib.sh
 
 prerender_index() { sed -i '' "1s/^---$/---\nexport const prerender = true;/" $1/src/pages/index.astro; }
@@ -61,7 +61,7 @@ suite_manifest() {
 suite_base() {
   local dir=$(variant base "base: '/docs',")
   BASE_PATH=/docs deploy $dir && zsh $LIVE/base.sh base
-  grep -qE '^/docs/old +/about +301$' $dir/dist/_redirects && echo "[base redirects file] ok" || echo "FAIL base redirects file"
+  grep -qE '^/docs/old +/about +301$' $dir/dist/client/_redirects && echo "[base redirects file] ok" || echo "FAIL base redirects file"
   python3 -I -c "import json,sys;m=json.load(open('$dir/.bunny/build.json'));print('[base manifest] ok' if m['astroAdapterBunny'].get('base')=='/docs' else 'FAIL base manifest')"
   BASE_PATH=/docs deploy $dir live2
   rules live2; settle
@@ -69,8 +69,16 @@ suite_base() {
   rules_down
 }
 
+suite_csp() {
+  local dir=$(variant csp "security: { csp: true },")
+  deploy $dir
+  python3 -I $LIVE/header-rules.py $BUNNY_TEST_PULL_ZONE_ID $dir/dist/client/_headers; settle
+  zsh $LIVE/csp.sh csp live
+  rules_down
+}
+
 suites=($@)
-(( $#suites )) || suites=(regress folder formats trailing errors manifest base)
+(( $#suites )) || suites=(regress folder formats trailing errors manifest base csp)
 for s in $suites; do echo "== $s"; suite_$s; done
 
 # Leave the zone on the test app, from the root, without rules.

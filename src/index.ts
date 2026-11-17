@@ -3,10 +3,12 @@ import type {
   AstroIntegration,
   IntegrationResolvedRoute,
 } from "astro";
-import { writeFile } from "node:fs/promises";
+import { access, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { appendStaticFile } from "./lib/append-static-file.ts";
 import { bundleServer } from "./lib/bundle-server.ts";
+import { printHeaders } from "./lib/print-headers.ts";
 import { printRedirects } from "./lib/print-redirects.ts";
 import { writeBuildManifest } from "./lib/write-build-manifest.ts";
 
@@ -14,6 +16,7 @@ export default function bunny(): AstroIntegration {
   let config: AstroConfig;
   let hasServer: boolean;
   let routes: IntegrationResolvedRoute[] = [];
+  let headers = "";
 
   return {
     name: "astro-adapter-bunny",
@@ -46,6 +49,7 @@ export default function bunny(): AstroIntegration {
             buildOutput,
             preserveBuildClientDir: true,
             preserveBuildServerDir: true,
+            staticHeaders: true,
           },
           supportedAstroFeatures: {
             staticOutput: "stable",
@@ -73,14 +77,17 @@ export default function bunny(): AstroIntegration {
       "astro:build:ssr": () => {
         hasServer = true;
       },
+      "astro:build:generated": ({ routeToHeaders }) => {
+        headers = printHeaders(routeToHeaders);
+      },
       "astro:build:done": async () => {
+        const clientDir = fileURLToPath(config.build.client);
         const redirects = printRedirects(routes, config.base);
         if (redirects) {
-          const redirectsFile = join(
-            fileURLToPath(config.outDir),
-            "_redirects",
-          );
-          await writeFile(redirectsFile, `${redirects}\n`);
+          await appendStaticFile(join(clientDir, "_redirects"), redirects);
+        }
+        if (headers) {
+          await appendStaticFile(join(clientDir, "_headers"), headers);
         }
 
         if (hasServer) {
@@ -96,9 +103,17 @@ export default function bunny(): AstroIntegration {
 
         await writeBuildManifest(config, {
           hasServer: Boolean(hasServer),
-          hasRedirects: Boolean(redirects),
+          hasRedirects: await exists(join(clientDir, "_redirects")),
+          hasHeaders: await exists(join(clientDir, "_headers")),
         });
       },
     },
   };
+}
+
+async function exists(file: string): Promise<boolean> {
+  return access(file).then(
+    () => true,
+    () => false,
+  );
 }
