@@ -1,6 +1,7 @@
 import type { RouteData } from "astro";
 import type { BaseApp } from "astro/app";
 import { getClientAddress, getPublicUrl } from "./bunny-helpers.ts";
+import { withRenderedCacheControl } from "./cache-control.ts";
 
 declare const Bunny: {
   v1: { waitUntil(promise: Promise<unknown>): void };
@@ -24,11 +25,5 @@ export async function renderApp(
     },
   );
 
-  if (response.headers.has("cache-control")) {
-    return response;
-  }
-
-  const copy = new Response(response.body, response);
-  copy.headers.set("cache-control", "private, no-store");
-  return copy;
+  return withRenderedCacheControl(response);
 }

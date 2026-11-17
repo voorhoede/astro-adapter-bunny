@@ -1,6 +1,6 @@
 import { createApp } from "astro/app/entrypoint";
 import * as BunnySDK from "@bunny.net/edgescript-sdk";
-import { applyCacheControl } from "./lib/cache-control.ts";
+import { withStoredCacheControl } from "./lib/cache-control.ts";
 import { addDeployFolder, removeDeployFolder } from "./lib/deploy-folder.ts";
 import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
 import { renderApp } from "./lib/render-app.ts";
@@ -63,6 +63,6 @@ BunnySDK.net.http
 
     const { pathname } = new URL(request.url);
     return Promise.resolve(
-      applyCacheControl(response, "storage", pathname, assetsPath),
+      withStoredCacheControl(response, pathname, assetsPath),
     );
   });
