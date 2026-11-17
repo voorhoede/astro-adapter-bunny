@@ -39,7 +39,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Middleware and `Astro.locals` | ✅ | | all | yes | yes | yes |
 | `Astro.url` and the origin check on POST | ✅ | Over http and https. | all | pass-through | yes | yes |
 | Methods other than GET/HEAD on files | ✅ | Answers 405 with `Allow: GET, HEAD` on a stored file or prerendered route, like storage itself; a missing path answers the 404 page. | Node: falls through | 405 | render | 405 |
-| `Astro.clientAddress` | ✅ | From `x-real-ip`, falling back to `x-forwarded-for`. bunny.net overwrites both, so a visitor cannot spoof them. | all | yes | yes | yes |
+| `Astro.clientAddress` | ✅ | From `x-real-ip`, when it holds a valid IP address. bunny.net overwrites it, so a visitor cannot spoof it. | all | yes | yes | yes |
 | HTML streaming | ✅ | First byte after 0.1 to 0.3 s, the slow part after 2.3 s. | all | untested | untested | untested |
 | `<Image>` on prerendered pages (Sharp at build) | ✅ | | all | yes | yes | no-op |
 | `<Image>` on on-demand pages (`/_image`) | 🟡 | Serves the original with `content-type: image/undefined`. | all, Sharp or image CDN | original (no-op) | original | original |

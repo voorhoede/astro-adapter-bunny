@@ -35,7 +35,7 @@ Only middleware. `bunny()` takes no options, and `src/script.ts` registers two h
 - **Any other method** is rendered by Astro in the request hook when an on-demand route matches, since the pull zone consumes the body on its way to storage. On a stored file or a prerendered route it answers 405 with `Allow: GET, HEAD`, as storage itself does. Any other path renders Astro's 404 page. No request body reaches storage.
 - **The visitor's URL** is rebuilt before rendering: the host from `host`, the protocol from the first value of `x-forwarded-proto`, and no port. Without it, Astro's origin check refused every POST from a browser with 403, and `Astro.url` and absolute redirects pointed at storage.
 - **Cookies** reach the visitor through `addCookieHeader: true`. Without it Astro left `Set-Cookie` out of the response.
-- **The visitor's address** is passed as `clientAddress`, from `x-real-ip` or else the first value of `x-forwarded-for`. Without it `Astro.clientAddress` threw.
+- **The visitor's address** is passed as `clientAddress`, from `x-real-ip` when it holds a valid IP address. Without it `Astro.clientAddress` threw.
 
 ### Consequences
 

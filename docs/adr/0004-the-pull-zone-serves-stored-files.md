@@ -31,7 +31,7 @@ Measured on bunny.net between 2026-11-09 and 2026-11-13, through a pull zone wit
 
 ## Decision outcome
 
-On-demand routes first. A request an on-demand route matches is rendered by Astro without asking storage. Every other GET and HEAD goes to the pull zone, and a 404 from storage is rendered by Astro, which answers its 404 page. Other methods never reach storage: a prerendered page or a stored asset answers 405 with `Allow: GET, HEAD`, anything else is rendered.
+On-demand routes first, so an on-demand GET renders without waiting for a 404 from storage. A request an on-demand route matches is rendered by Astro without asking storage. Every other GET and HEAD goes to the pull zone, and a 404 from storage is rendered by Astro, which answers its 404 page. Other methods never reach storage: a prerendered page or a stored asset answers 405 with `Allow: GET, HEAD`, anything else is rendered.
 
 - **Prerendered routes are rewritten to their file.** When `app.match(request, true)` returns a prerendered route that is not an endpoint, and the build format is `'file'`, or `'preserve'` for a route that is not an index route, the path without its trailing slash gets `.html`. `/` and every other path pass unchanged, so the pull zone resolves `index.html` and stored files itself.
 - **Redirects are rendered, fallbacks are files.** A redirect route answers 301 or 308 from the script. An i18n fallback to a prerendered page answers the meta refresh page Astro wrote.
