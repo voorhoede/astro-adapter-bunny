@@ -1,9 +1,10 @@
 import { createApp } from "astro/app/entrypoint";
 import * as BunnySDK from "@bunny.net/edgescript-sdk";
-import { serveStaticAsset } from "./lib/serve-static-asset.ts";
-import { renderApp } from "./lib/render-app.ts";
-import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
+import { applyCacheControl } from "./lib/cache-control.ts";
 import { addDeployFolder, removeDeployFolder } from "./lib/deploy-folder.ts";
+import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
+import { renderApp } from "./lib/render-app.ts";
+import { serveStaticAsset } from "./lib/serve-static-asset.ts";
 
 const app = createApp();
 const assetsPath = `${app.manifest.base.replace(/\/$/, "")}/${app.manifest.assetsDir}/`;
@@ -20,49 +21,48 @@ BunnySDK.net.http
       return renderApp(request, app);
     }
 
-    const routeData = app.match(request, true);
-    if (routeData?.type === "redirect") {
-      return renderApp(request, app, routeData);
-    }
-
-    if (["GET", "HEAD"].includes(request.method)) {
-      return serveStaticAsset(request, app).then<Request>((storageRequest) =>
-        addDeployFolder(storageRequest, folder),
-      );
+    const redirectRoute = app.match(request, true);
+    if (redirectRoute?.type === "redirect") {
+      return renderApp(request, app, redirectRoute);
     }
 
     if (app.match(request)) {
       return renderApp(request, app);
     }
 
-    const { pathname } = new URL(request.url);
-    if (
-      app.match(request, true)?.prerender ||
-      app.manifest.assets.has(pathname)
-    ) {
-      return Promise.resolve(
-        new Response(null, { status: 405, headers: { allow: "GET, HEAD" } }),
-      );
+    // Storage only answers GET and HEAD; anything else must not reach it.
+    if (!["GET", "HEAD"].includes(request.method)) {
+      const { pathname } = new URL(request.url);
+      if (
+        app.match(request, true)?.prerender ||
+        app.manifest.assets.has(pathname)
+      ) {
+        return Promise.resolve(
+          new Response(null, { status: 405, headers: { allow: "GET, HEAD" } }),
+        );
+      }
+
+      return renderApp(request, app);
     }
 
-    return renderApp(request, app);
+    return serveStaticAsset(request, app).then<Request>((storageRequest) =>
+      addDeployFolder(storageRequest, folder),
+    );
   })
   .onOriginResponse(({ request: originRequest, response }) => {
     const { request } = removeDeployFolder(originRequest);
 
     if (response.status === 404) {
       // The storage zone's Custom404FilePath answers with the prerendered 404 page, which Astro cannot render here.
-      if (hasPrerenderedNotFound && !app.match(request)) {
+      if (hasPrerenderedNotFound) {
         return Promise.resolve(response);
       }
+
       return renderApp(request, app);
     }
 
     const { pathname } = new URL(request.url);
-    const cacheControl = pathname.startsWith(assetsPath)
-      ? "public, max-age=31536000, immutable"
-      : "public, max-age=0, must-revalidate";
-    response.headers.set("cache-control", cacheControl);
-
-    return Promise.resolve(response);
+    return Promise.resolve(
+      applyCacheControl(response, "storage", pathname, assetsPath),
+    );
   });

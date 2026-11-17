@@ -1,37 +1,33 @@
 import type { RouteData } from "astro";
 import type { BaseApp } from "astro/app";
+import { getClientAddress, getPublicUrl } from "./bunny-helpers.ts";
+
+declare const Bunny: {
+  v1: { waitUntil(promise: Promise<unknown>): void };
+};
 
 export async function renderApp(
   request: Request,
   app: BaseApp,
-  routeData?: RouteData,
+  routeData: RouteData | undefined = app.match(request),
 ): Promise<Response> {
-  const url = new URL(request.url);
+  const response = await app.render(
+    new Request(getPublicUrl(request), request),
+    {
+      addCookieHeader: true,
+      clientAddress: getClientAddress(request),
+      // locals,
+      // prerenderedErrorPageFetch,
+      routeData,
+      waitUntil: (promise) => Bunny.v1.waitUntil(promise),
+    },
+  );
 
-  const protocol = request.headers
-    .get("x-forwarded-proto")
-    ?.split(",")[0]
-    ?.trim();
-  if (protocol) url.protocol = protocol;
-
-  const host = request.headers.get("host");
-  if (host) url.host = host;
-
-  url.port = "";
-
-  const clientAddress =
-    request.headers.get("x-real-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-
-  const response = await app.render(new Request(url, request), {
-    addCookieHeader: true,
-    ...(clientAddress && { clientAddress }),
-    ...(routeData && { routeData }),
-  });
-
-  if (!response.headers.has("cache-control")) {
-    response.headers.set("cache-control", "private, no-store");
+  if (response.headers.has("cache-control")) {
+    return response;
   }
 
-  return response;
+  const copy = new Response(response.body, response);
+  copy.headers.set("cache-control", "private, no-store");
+  return copy;
 }
