@@ -1,5 +1,5 @@
 ---
-status: accepted; open (a prerendered 500 page)
+status: accepted
 date: 2026-10-28, rewritten 2026-11-15 and 2026-11-17
 ---
 
@@ -19,7 +19,7 @@ Measured on bunny.net between 2026-11-09 and 2026-11-13, through a pull zone wit
 - A rendered response with `s-maxage=60` was a cache HIT on the second request, with the route checked first and with storage asked first.
 - A redirect from the config to an on-demand route answered a real 301; to a prerendered page, the meta refresh page with 200, until `build.redirects: false` let the script answer it.
 - Behind an edge rule that serves `deploys/<id>` in storage, the script saw `/deploys/<id>/about`, and on-demand routes answered 404 until the script stripped the folder (2026-11-15).
-- A prerendered `404.astro` or `500.astro` answered an empty 404 or 500: Astro fetches the page from the request's origin only when that host is in `allowedDomains`, and otherwise from `localhost`.
+- A prerendered `404.astro` or `500.astro` answered an empty 404 or 500: Astro fetches the page from the request's origin only when that host is in `allowedDomains`, and otherwise from `localhost`. With a fetch of its own that asks the pull zone for the page's path on the visitor's host, a page that threw answered the prerendered 500 page with status 500, and a POST to a missing path the prerendered 404 page (2026-11-17).
 - With the storage zone's `Custom404FilePath` set to `/404.html`, storage answered a missing file with that page and status 404 (2026-11-15). The pull zone's custom error page did not replace a 500 the script answered, also not when the script threw.
 
 ## Considered options
@@ -36,6 +36,7 @@ On-demand routes first, so an on-demand GET renders without waiting for a 404 fr
 - **Prerendered routes are rewritten to their file.** When `app.match(request, true)` returns a prerendered route that is not an endpoint, and the build format is `'file'`, or `'preserve'` for a route that is not an index route, the path without its trailing slash gets `.html`. `/` and every other path pass unchanged, so the pull zone resolves `index.html` and stored files itself.
 - **Redirects are rendered, fallbacks are files.** A redirect route answers 301 or 308 from the script. An i18n fallback to a prerendered page answers the meta refresh page Astro wrote.
 - **A prerendered 404 page comes from storage.** When `404.astro` is prerendered, the script passes on storage's 404, which carries the page through `Custom404FilePath`. A route that answers its own 404 keeps it.
+- **A prerendered 404 or 500 page that Astro asks for comes through the pull zone.** The script gives Astro a fetch that requests the page's path on the visitor's host, so the request passes the edge rules and the script like any other.
 - **A deploy folder is optional.** When an edge rule serves `deploys/<id>` and names it in `X-Bunny-Deploy`, the script strips that folder before routing and adds it back for storage. Without it, files come from the root.
 
 ### Consequences
@@ -46,8 +47,8 @@ On-demand routes first, so an on-demand GET renders without waiting for a 404 fr
 - Bad: without a deploy folder, a file left in storage by an earlier build stays reachable on paths no on-demand route answers, so a deploy to the root has to remove files the build no longer has.
 - Bad: when a rewritten path has no file, the 404 page renders with the rewritten request, so its `Astro.url` ends in `.html`.
 - Bad: an i18n fallback to a prerendered page answers 200 with HTML.
-- Bad: a prerendered 404 page needs `Custom404FilePath` on the storage zone, and a POST to a missing path or a page that renders Astro's 404 still answers empty.
-- Bad: a prerendered `500.astro` answers an empty 500; an on-demand one renders.
+- Bad: a prerendered 404 page needs `Custom404FilePath` on the storage zone for a missing stored file.
+- Bad: a prerendered error page that Astro asks for costs one subrequest through the pull zone.
 
 ### Confirmation
 

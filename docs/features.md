@@ -25,9 +25,9 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Files without extension (`/CNAME`) | ✅ | Served as stored, with `directory`, `file` and `preserve`. | Node yes | yes, with file list | no | yes, with file list |
 | Files written after the build (sitemap, service worker) | 🟡 | Served from storage, unless an on-demand route matches the same path: `/docs/late.txt` renders `docs/[...path]`, not the file. | n/a | breaks with file list | yes, storage first | breaks with file list |
 | On-demand `404.astro` | ✅ | | all | yes | yes | yes |
-| Prerendered `404.astro` | ✅ | From storage through `Custom404FilePath`, which the deploy tool sets. A POST to a missing path still answers empty. | Node, Cloudflare read it directly | yes | yes | yes |
+| Prerendered `404.astro` | ✅ | From storage through `Custom404FilePath`, which the deploy tool sets. When Astro answers the 404 itself, such as for a POST, the script fetches the page through the pull zone. | Node, Cloudflare read it directly | yes | yes | yes |
 | On-demand `500.astro` | ✅ | | all | yes | yes | yes |
-| Prerendered `500.astro` | ❌ | Answers an empty 500, like the prerendered 404. | Node, Cloudflare | yes | untested | yes |
+| Prerendered `500.astro` | ✅ | The script fetches the page through the pull zone, one subrequest. | Node, Cloudflare | yes | untested | yes |
 | `redirects` to an on-demand route | ✅ | Real 301/308. | all | yes | yes | yes |
 | `redirects` to a prerendered page | ✅ | Real 301/308 from the script (`build.redirects: false`). `dist/client/_redirects` lists them for edge rules, which a static site needs from its deploy tool. | all real | real | real | real |
 | `Astro.redirect()` | ✅ | | all | yes | yes | yes |
