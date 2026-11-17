@@ -20,6 +20,7 @@
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@astrojs/internal-helpers": "^0.13.2",
     "@bunny.net/edgescript-sdk": "^0.13.0",
     "rolldown": "^1.2.15"
   },

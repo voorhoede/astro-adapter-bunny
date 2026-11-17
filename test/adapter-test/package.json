@@ -9,7 +9,6 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/internal-helpers": "^0.13.2",
     "astro": "^7.4.5",
     "astro-adapter-bunny": "file:../.."
   },
