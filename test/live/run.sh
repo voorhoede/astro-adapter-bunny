@@ -41,8 +41,17 @@ suite_trailing() {
 }
 
 suite_errors() {
+  local dir=$(variant errors "" errors)
   storage_404 /404.html
-  deploy $(variant errors "" errors) && zsh $LIVE/error-pages.sh
+  deploy $dir && zsh $LIVE/error-pages.sh root
+  storage_404 /deploys/live3/404.html
+  deploy $dir live3
+  rules live3; settle
+  zsh $LIVE/error-pages.sh folder
+  rules_down
+  dir=$(variant errors-base "base: '/docs'," errors)
+  storage_404 /docs/404.html
+  BASE_PATH=/docs deploy $dir && P=/docs zsh $LIVE/error-pages.sh base
   storage_404 ""
 }
 
