@@ -5,6 +5,7 @@
     "module": "nodenext",
     "moduleDetection": "force",
     "strict": true,
+    "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noUncheckedSideEffectImports": true,

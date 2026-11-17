@@ -11,14 +11,15 @@ export async function renderApp(
   app: BaseApp,
   routeData: RouteData | undefined = app.match(request),
 ): Promise<Response> {
+  const clientAddress = getClientAddress(request);
   const response = await app.render(
     new Request(getPublicUrl(request), request),
     {
       addCookieHeader: true,
-      clientAddress: getClientAddress(request),
+      ...(clientAddress && { clientAddress }),
       // locals,
       // prerenderedErrorPageFetch,
-      routeData,
+      ...(routeData && { routeData }),
       waitUntil: (promise) => Bunny.v1.waitUntil(promise),
     },
   );
