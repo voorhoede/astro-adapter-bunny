@@ -1,9 +1,9 @@
 ---
 status: accepted
-date: 2026-10-28, rewritten 2026-11-15
+date: 2026-10-28, rewritten 2026-11-15 and 2026-11-17
 ---
 
-# A redirects file for edge rules, and no `_headers`
+# Redirects and headers files for edge rules
 
 ## Context and problem statement
 
@@ -20,6 +20,8 @@ bunny.net has edge rules with a "Redirect to URL" action. Measured on 2026-11-15
 - A rule answered before the script, also on a path an on-demand route handles.
 - A pull zone takes 50 edge rules, 5 triggers per rule and 5 conditions per trigger, by default.
 
+With `security.csp`, Astro puts each prerendered page's policy in a `<meta>` tag, unless the adapter declares `staticHeaders`; then Astro leaves the tag out and hands the adapter each page's headers in `routeToHeaders`. Measured on 2026-11-17, edge rules with the action "Set response header" and a trigger "response header is missing" set each prerendered page's own policy, and an on-demand page kept the policy it sent itself.
+
 ## Considered options
 
 - **Parse `_headers` and `_redirects` at build and apply them in the script**, with Cloudflare's semantics. Portable, but a parser and a matcher of our own.
@@ -28,9 +30,9 @@ bunny.net has edge rules with a "Redirect to URL" action. Measured on 2026-11-15
 
 ## Decision outcome
 
-The third, for redirects. The adapter sets `build.redirects: false` and writes Astro's `redirects` to `dist/_redirects`, outside `dist/client`, one line per redirect: source, target and status, with `:param` for a dynamic segment and `*` and `:splat` for a rest segment. The script renders a redirect route itself, so a site with a script answers a real 301 or 308 without any edge rule. A deploy tool turns the file into edge rules, which a static site needs and a site with a script may use to answer before the script.
+The third, for redirects and for the policies of prerendered pages. The adapter sets `build.redirects: false` and writes Astro's `redirects` to `dist/client/_redirects`, one line per redirect: source, target and status, with `:param` for a dynamic segment and `*` and `:splat` for a rest segment. The script renders a redirect route itself, so a site with a script answers a real 301 or 308 without any edge rule. A deploy tool turns the file into edge rules, which a static site needs and a site with a script may use to answer before the script.
 
-The adapter does not read `_headers` or a site's own `public/_redirects`. A header on rendered pages goes in Astro middleware.
+The adapter declares `staticHeaders` and writes each prerendered page's Content-Security-Policy to `dist/client/_headers`, one block per page; other headers Astro saw while prerendering, such as an i18n fallback's `Location`, are left out. Both files are appended to the site's own `public/_redirects` and `public/_headers`, whose lines stay first. The adapter does not parse the site's lines. A header on rendered pages goes in Astro middleware.
 
 ### Consequences
 
@@ -38,9 +40,12 @@ The adapter does not read `_headers` or a site's own `public/_redirects`. A head
 - Good: a deploy tool gets the redirects in the format Netlify and Cloudflare use.
 - Bad: a static site depends on its deploy tool for redirects; without edge rules they answer 404.
 - Bad: an edge rule answers 301 where Astro answers 308 for a POST, and holds a parameter only as a whole path segment.
-- Bad: stored files get only the adapter's `Cache-Control`, no security header baseline.
-- Bad: a site moving from Cloudflare or Netlify keeps its `_headers` and `_redirects` only if its deploy tool picks them up, and the files are publicly readable.
+- Good: a prerendered page gets its policy as a header, so the directives the CSP specification ignores in a `<meta>` tag, such as `frame-ancestors`, are not lost.
+- Good: a site moving from Cloudflare or Netlify keeps its `_headers` and `_redirects` lines in the files a deploy tool reads.
+- Bad: stored files get only `Cache-Control` and the policies, unless the site's own `_headers` adds more and the deploy tool applies it.
+- Bad: every distinct policy takes an edge rule, from the same 50 as the redirects.
+- Bad: both files are uploaded with `dist/client` and are publicly readable, unless the deploy tool skips them.
 
 ### Confirmation
 
-The test app builds `dist/_redirects` with a static, a dynamic and an on-demand redirect, writes no meta refresh page for them, and on bunny.net without edge rules answers 301 to a GET and 308 to a POST, with `build.format` `'directory'`, `'file'` and `'preserve'`. A static site builds `dist/_redirects` and no script.
+The test app builds `dist/client/_redirects`, with its own lines first, and a static, a dynamic and an on-demand redirect, writes no meta refresh page for them, and on bunny.net without edge rules answers 301 to a GET and 308 to a POST, with `build.format` `'directory'`, `'file'` and `'preserve'`. A static site builds `dist/client/_redirects` and no script. With `security.csp`, the test app builds `dist/client/_headers` with its own lines first and no `<meta>` policy, and on bunny.net the edge rules made from it set each prerendered page's policy.

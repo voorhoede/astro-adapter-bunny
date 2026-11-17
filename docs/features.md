@@ -29,7 +29,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | On-demand `500.astro` | ✅ | | all | yes | yes | yes |
 | Prerendered `500.astro` | ❌ | Answers an empty 500, like the prerendered 404. | Node, Cloudflare | yes | untested | yes |
 | `redirects` to an on-demand route | ✅ | Real 301/308. | all | yes | yes | yes |
-| `redirects` to a prerendered page | ✅ | Real 301/308 from the script (`build.redirects: false`). `dist/_redirects` lists them for edge rules, which a static site needs from its deploy tool. | all real | real | real | real |
+| `redirects` to a prerendered page | ✅ | Real 301/308 from the script (`build.redirects: false`). `dist/client/_redirects` lists them for edge rules, which a static site needs from its deploy tool. | all real | real | real | real |
 | `Astro.redirect()` | ✅ | | all | yes | yes | yes |
 | `Astro.rewrite()` to an on-demand page | ✅ | Also to an on-demand `/404`. | all | yes | yes | yes |
 | `Astro.rewrite()` to a prerendered page | ❌ | Answers 500: the page is not in the script. | untested | throws on prerendered 404 | untested | throws on prerendered 404 |
@@ -71,9 +71,9 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Sessions | ❌ | No default driver. ⛔ Storage is a weak session store. | Node, Netlify, Cloudflare | Storage driver | none | Storage driver |
 | `routeRules` and `Astro.cache` | ❌ | No cache provider, so no CDN headers. | Vercel, Netlify, Cloudflare | yes | yes | yes |
 | `Astro.cache.invalidate()` | ❌ | ⛔ tag purges did not take effect on script responses. | Vercel, Netlify, Cloudflare | path and tag | path only | path and tag |
-| CSP (`security.csp`) on prerendered pages | 🟡 | Ends up in a `<meta>` tag; `staticHeaders` is not declared. | Node, Vercel, Netlify | headers | meta only | headers |
-| Extra headers on stored files | ❌ | No `headers` option and no `_headers`. | platform files | `headers` option | `_headers` | `headers` option |
-| `public/_headers` and `_redirects` | ❌ | ⛔ bunny.net has no such feature. | Netlify, Cloudflare | static builds only | parsed by the script | static builds only |
+| CSP (`security.csp`) on prerendered pages | ✅ | Each page's policy goes to `dist/client/_headers`, not a `<meta>` tag; the deploy tool turns it into edge rules. | Node, Vercel, Netlify | headers | meta only | headers |
+| Extra headers on stored files | 🟡 | Through the site's own `public/_headers`, kept first in `dist/client/_headers`, once the deploy tool turns it into edge rules. Untested live. | platform files | `headers` option | `_headers` | `headers` option |
+| `public/_headers` and `_redirects` | 🟡 | The adapter keeps their lines first in its own files; a deploy tool has to turn them into edge rules. ⛔ bunny.net itself reads neither. | Netlify, Cloudflare | static builds only | parsed by the script | static builds only |
 | i18n routing and fallback | ✅ | Fallback to an on-demand page is a 302. Fallback to a prerendered page is a meta refresh page with 200: `build.redirects: false` leaves fallbacks alone. | all | tested | partly | custom routing |
 | `i18n.domains` | ❌ | Declared unsupported. A build with domains completes without a warning; runtime untested. | Node, Vercel, Cloudflare | untested | unsupported | untested |
 | `Astro.preferredLocale` | ✅ | From `Accept-Language`. | all | | | |
@@ -118,7 +118,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 | --- | --- | --- | --- | --- |
 | `middlewareMode` | not set (`classic`) | ✅ | Astro middleware runs inside the script. `edge` needs a separate function, which bunny.net does not have. | Vercel, Netlify offer `edge` |
 | `buildOutput` | follows the project | ✅ | Passed back from `astro:config:done`; the script is only bundled when `astro:build:ssr` runs. | Node `server`, others follow the project |
-| `staticHeaders` | not set (`false`) | ❌ | Astro keeps the CSP of prerendered pages in a `<meta>` tag. With it on, Astro hands `routeToHeaders` to the adapter, which could add them to stored files in the response hook. | Node, Vercel, Netlify |
+| `staticHeaders` | `true` | ✅ | Astro hands `routeToHeaders` to the adapter, which writes each prerendered page's CSP to `dist/client/_headers`. | Node, Vercel, Netlify |
 | `preserveBuildClientDir` | `true` | ✅ | Static builds also write to `dist/client`, so every deploy uploads the same folder. | Cloudflare |
 | `preserveBuildServerDir` | `true` | ✅ | Keeps the server entry of a static site with `server:defer` in `dist/server`, out of the files. | Vercel, Cloudflare |
 

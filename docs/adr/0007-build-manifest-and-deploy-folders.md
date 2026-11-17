@@ -23,7 +23,7 @@ Astro encrypts the props of a server island with a key made per build. On 2026-1
 
 ## Decision outcome
 
-The third. The build writes `.bunny/build.json` in bunny.net's shape, with `type: "middleware"`, the `astro:env` secrets in `requires.env`, and our own fields under `astroAdapterBunny`: `trailingSlash`, `buildFormat`, `assetsDir`, the path of `dist/_redirects` and the name of the deploy folder header. A deploy tool serves a release from `deploys/<id>` through an edge rule that also sets `X-Bunny-Deploy`; the script strips that folder before routing and adds it back for storage. Without the header the script adds the folder bunny.net's CLI names in `__BUNNY_DEPLOY__`, and without either it reads from the root.
+The third. The build writes `.bunny/build.json` in bunny.net's shape, with `type: "middleware"`, the `astro:env` secrets in `requires.env`, and our own fields under `astroAdapterBunny`: `trailingSlash`, `buildFormat`, `assetsDir`, the paths of `dist/client/_redirects` and `dist/client/_headers` and the name of the deploy folder header. A deploy tool serves a release from `deploys/<id>` through an edge rule that also sets `X-Bunny-Deploy`; the script strips that folder before routing and adds it back for storage. Without the header the script adds the folder bunny.net's CLI names in `__BUNNY_DEPLOY__`, and without either it reads from the root.
 
 ### Consequences
 

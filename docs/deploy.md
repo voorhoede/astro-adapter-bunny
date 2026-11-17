@@ -8,7 +8,8 @@ What a deploy tool has to do to publish a site built with this adapter. The adap
 | --- | --- | --- |
 | `dist/client/` | always | Every file the site serves: prerendered pages, `public/` files and `/_astro/*` assets. |
 | `dist/index.js` | only when the site has a server | The Edge Script, one plain ES module. A fully static site has none. |
-| `dist/_redirects` | when the project has `redirects` | Astro's redirects in the `_redirects` format, outside `dist/client` so it is not uploaded. |
+| `dist/client/_redirects` | when the project has `redirects` or `public/_redirects` | The site's own lines first, then Astro's redirects in the `_redirects` format. |
+| `dist/client/_headers` | when a prerendered page has a Content-Security-Policy or the site has `public/_headers` | The site's own lines first, then each prerendered page's Content-Security-Policy in the `_headers` format. |
 | `dist/server/` | sometimes | Astro's own server build. Not deployed. |
 | `.bunny/build.json` | always | The build manifest (see below), at the project root. A build output, so keep it out of version control. |
 
@@ -28,7 +29,7 @@ A custom `outDir` replaces `dist`.
 | `requires.pullZone` | Only for `ssr`: `disableCookies: false` and `enableSmartCache: false`. |
 | `requires.env` | Only for `ssr`: every `astro:env` secret, with `secret: true`, and `optional: true` when it is optional or has a default. |
 | `dev.command` | Only for `ssr`: `astro dev`. |
-| `astroAdapterBunny` | Our own fields, under one key: `trailingSlash`, `buildFormat`, `assetsDir`, `redirects` (the path of `dist/_redirects`, when there are redirects) and `deployFolderHeader` (`X-Bunny-Deploy`). |
+| `astroAdapterBunny` | Our own fields, under one key: `trailingSlash`, `buildFormat`, `assetsDir`, `redirects` (the path of `dist/client/_redirects`, when it exists), `headers` (the path of `dist/client/_headers`, when it exists) and `deployFolderHeader` (`X-Bunny-Deploy`). |
 
 Paths are relative to the project root and use forward slashes. bunny.net's contract says its CLI ignores fields it does not know; whether its CLI accepts this manifest is untested.
 
@@ -44,7 +45,7 @@ Paths are relative to the project root and use forward slashes. bunny.net's cont
 2. **Upload `dist/client`** to `deploys/<id>/` in the storage zone, keeping paths, and under the site's `base` when it has one (see below). `<id>` names the release.
 3. **Publish `dist/index.js`** to the Edge Script, when it exists.
 4. **Point the pull zone at the release** with the deploy folder rules (see below).
-5. **Apply the redirects** as edge rules (see below).
+5. **Apply the redirects and headers** as edge rules (see below).
 6. **Purge the pull zone.** A full zone purge took effect within 30 seconds. A tag purge against a script response had not taken effect after 5 minutes.
 
 Uploading before publishing means new hashed assets exist before a new script or page asks for them. A rollback publishes the earlier script, points the rewrite rule and the 404 page back at its folder, then purges; no file moves.
@@ -107,7 +108,7 @@ With `base: '/docs'`, Astro writes `dist/client` without the `docs` folder, but 
 - `Custom404FilePath` becomes `/deploys/<id>/docs/404.html`.
 - A static site's asset rule matches `*/docs/_astro/*`.
 - A path outside the base finds nothing in storage and answers the 404 page.
-- `dist/_redirects` puts the base in front of each source. Astro answers a redirect with the target as written, without the base, and so does an edge rule made from the file.
+- `dist/client/_redirects` puts the base in front of each source. Astro answers a redirect with the target as written, without the base, and so does an edge rule made from the file.
 
 Measured on bunny.net on 2026-11-15: a build with `base: '/docs'` uploaded under `docs/` passed 14 checks, from the root and from a deploy folder.
 
@@ -123,7 +124,7 @@ A static site has no script. Edge rules can do part of it, measured on 2026-11-1
 
 ## Redirects
 
-The adapter sets `build.redirects: false`, so Astro writes no meta refresh pages, and writes Astro's `redirects` to `dist/_redirects`. On a site with a script, the script answers these redirects itself with a real 301 or 308, so edge rules are optional there: they answer before the script runs. A static site has no script, so without edge rules its redirects answer 404. Each line has a source, a target and a status:
+The adapter sets `build.redirects: false`, so Astro writes no meta refresh pages, and writes Astro's `redirects` to `dist/client/_redirects`. On a site with a script, the script answers these redirects itself with a real 301 or 308, so edge rules are optional there: they answer before the script runs. A static site has no script, so without edge rules its redirects answer 404. Each line has a source, a target and a status:
 
 ```
 /old /about 301
@@ -159,7 +160,29 @@ Limits:
 
 Mark the rules the tool creates, for example by a fixed prefix in the description, and replace only those on every deploy. Leave rules the site owner added alone.
 
-A site's own `public/_redirects` lands in `dist/client/_redirects`. The tool can merge it with `dist/_redirects`, putting the site's own lines first, and should skip uploading it.
+The adapter appends Astro's redirects to a site's own `public/_redirects`, so the site's lines come first. The file is uploaded with `dist/client` and is publicly readable unless the tool skips it.
+
+## Headers
+
+With `security.csp`, the adapter writes no `<meta>` policy into prerendered pages. It appends each page's Content-Security-Policy to `dist/client/_headers`, after the lines of a site's own `public/_headers`. Each block is a path and its indented headers:
+
+```
+/about
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-...'
+```
+
+Only the policy is listed: other headers Astro saw while prerendering, such as an i18n fallback's `Location`, are not. On-demand pages send their own policy.
+
+Translate the file into edge rules with the action "Set response header", one group per header name:
+
+- **The most common value** goes in one rule with two triggers, both required: the response header is missing (trigger "Response header", match none of `*`), and the URL matches none of the paths that have another value.
+- **Every other value** gets its own rule: the response header is missing, and the URL matches one of its paths. Use the same anchored pattern as for redirects.
+
+A trigger takes 5 patterns, so split a longer exception list over more triggers. The "response header is missing" trigger keeps a header a route sets itself.
+
+Measured on bunny.net on 2026-11-17 with `security.csp`: the edge rules made from the file set each prerendered page's own policy, two pages with different policies each got theirs, an on-demand page kept its own, and no prerendered page carried a `<meta>` policy.
+
+Limits: every distinct value takes one edge rule, from the same 50 as the redirects.
 
 ## Script variables
 
