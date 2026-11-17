@@ -13,17 +13,17 @@ export async function renderApp(
   routeData: RouteData | undefined = app.match(request),
 ): Promise<Response> {
   const clientAddress = getClientAddress(request);
-  const response = await app.render(
-    new Request(getPublicUrl(request), request),
-    {
-      addCookieHeader: true,
-      ...(clientAddress && { clientAddress }),
-      // locals,
-      // prerenderedErrorPageFetch,
-      ...(routeData && { routeData }),
-      waitUntil: (promise) => Bunny.v1.waitUntil(promise),
-    },
-  );
+  const publicUrl = getPublicUrl(request);
+  const response = await app.render(new Request(publicUrl, request), {
+    addCookieHeader: true,
+    ...(clientAddress && { clientAddress }),
+    // locals,
+    // Astro fetches a prerendered 404 or 500 page from localhost unless the host is in allowedDomains, which answered an empty page. The pull zone serves it from storage instead.
+    prerenderedErrorPageFetch: (url) =>
+      fetch(new URL(new URL(url).pathname, publicUrl)),
+    ...(routeData && { routeData }),
+    waitUntil: (promise) => Bunny.v1.waitUntil(promise),
+  });
 
   return withRenderedCacheControl(response);
 }
