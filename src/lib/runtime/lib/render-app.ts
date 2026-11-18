@@ -1,6 +1,5 @@
-import type { RouteData } from "astro";
 import type { BaseApp } from "astro/app";
-import { getClientAddress, getPublicUrl } from "./bunny-helpers.ts";
+import { getClientAddress, toVisitorRequest } from "./bunny-helpers.ts";
 import { withRenderedCacheControl } from "./cache-control.ts";
 
 declare const Bunny: {
@@ -8,20 +7,23 @@ declare const Bunny: {
 };
 
 export async function renderApp(
-  request: Request,
+  originRequest: Request,
   app: BaseApp,
-  routeData: RouteData | undefined = app.match(request),
 ): Promise<Response> {
-  const clientAddress = getClientAddress(request);
-  const publicUrl = getPublicUrl(request);
-  const response = await app.render(new Request(publicUrl, request), {
+  const request = toVisitorRequest(originRequest);
+  let routeData = app.match(request, true);
+
+  if (routeData?.type !== "redirect") {
+    routeData = app.match(request);
+  }
+
+  const response = await app.render(request, {
     addCookieHeader: true,
-    ...(clientAddress && { clientAddress }),
-    // locals,
+    clientAddress: getClientAddress(request),
+    routeData,
     // Astro fetches a prerendered 404 or 500 page from localhost unless the host is in allowedDomains, which answered an empty page. The pull zone serves it from storage instead.
     prerenderedErrorPageFetch: (url) =>
-      fetch(new URL(new URL(url).pathname, publicUrl)),
-    ...(routeData && { routeData }),
+      fetch(new URL(new URL(url).pathname, request.url)),
     waitUntil: (promise) => Bunny.v1.waitUntil(promise),
   });
 

@@ -15,7 +15,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./script.ts": "./src/script.ts"
+    "./script.ts": "./src/lib/runtime/script.ts"
   },
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
