@@ -8,11 +8,22 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendStaticFile } from "./lib/append-static-file.ts";
 import { bundleServer } from "./lib/bundle-server.ts";
+import {
+  type ImageServiceOption,
+  resolveImageService,
+} from "./lib/image-service.ts";
 import { printHeaders } from "./lib/print-headers.ts";
 import { printRedirects } from "./lib/print-redirects.ts";
 import { writeBuildManifest } from "./lib/write-build-manifest.ts";
 
-export default function bunny(): AstroIntegration {
+export type Options = {
+  /** How images are transformed. Defaults to `compile`. */
+  imageService?: ImageServiceOption;
+};
+
+export default function bunny({
+  imageService = "compile",
+}: Options = {}): AstroIntegration {
   let config: AstroConfig;
   let hasServer: boolean;
   let routes: IntegrationResolvedRoute[] = [];
@@ -24,14 +35,13 @@ export default function bunny(): AstroIntegration {
       "astro:config:setup": ({ config: userConfig, updateConfig }) => {
         config = userConfig;
 
+        const service = resolveImageService(
+          imageService,
+          userConfig.image.service,
+        );
         updateConfig({
           build: { redirects: false },
-          image: {
-            service: {
-              build: { entrypoint: "astro/assets/services/sharp" },
-              runtime: { entrypoint: "astro/assets/services/noop" },
-            },
-          },
+          ...(service && { image: { service } }),
         });
       },
       "astro:config:done": ({
