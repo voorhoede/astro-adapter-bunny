@@ -46,17 +46,17 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Content collections | ✅ | Prerendered list and on-demand entries. | ➖ | untested | untested | untested |
 | `import.meta.env` at runtime | ✅ | Inlined at build, as Astro does. `process.env` reads script variables at runtime. | all | yes | yes | yes |
 | Range requests | ✅ | The pull zone answers 206 with the right bytes, also on a cache miss. `.svg` answered 200 with the whole file. | Node yes | yes | no | yes |
-| Conditional requests (`If-None-Match`) | 🟡 | Stored files carry an `ETag` and `Last-Modified`, but a matching `If-None-Match` or `If-Modified-Since` still answered 200 with the body. | Node yes | yes | no | yes |
+| Conditional requests (`If-None-Match`) | 🟡 | Stored files carry an `ETag` and `Last-Modified`, but a matching `If-None-Match` or `If-Modified-Since` still answered 200 with the body. A 304 from the script needs `onClientResponse`, which only runs with the pull zone's "before cache" execution, so the script would run on every request, cache hits included. | Node yes | yes | no | yes |
 | Path traversal (`/..%2f..%2f`) | ✅ | bunny.net answers 400 before the script. | all | yes | yes | yes |
 | Request bodies | ✅ | A 100 MB POST reached an endpoint and came back. Astro limits actions and server islands to 1 MB itself. | Node limits to 1 GiB | untested | untested | untested |
 | Compression | ✅ | gzip on HTML and JSON, from the pull zone. No brotli. | platform | | | |
-| Content type for unknown extensions | ❌ | `site.webmanifest` answered `application/octet-stream` through the pull zone. | n/a | from extension | from extension | from extension |
+| Content type for unknown extensions | ✅ | Storage answered `application/octet-stream` for `.webmanifest`, `.mjs`, `.csv`, `.yaml` and ten more; the script sets their type on the way to the cache. | n/a | from extension | from extension | from extension |
 | Storage zone shielded from visitors | ✅ | With deploy folders: an edge rule blocks `/deploys/*` with 403. A deploy to the root stays readable. | n/a | n/a | deploy folder, reserved paths | deploy folder |
 | Cache-Control defaults | ✅ | Rendered `private, no-store`, files `max-age=0, must-revalidate`. | all | yes | yes | yes |
 | `astro dev` | ✅ | | all | yes | yes | yes |
 | `astro preview` | ❌ | No preview entrypoint. | Node, Cloudflare | yes | yes | yes |
-| Script size check | ❌ | No warning at 7 MB or failure at 10 MB. ⛔ see platform limits. | n/a | warn 7.5, fail 10 MB | warn 7, fail 10 MB | warn 7.5, fail 10 MB |
-| Refusing Node builtins that break the script | ❌ | ⛔ see platform limits. | n/a | aliases bare names | fails the build | aliases bare names |
+| Script size check | ✅ | The build warns above 7 MB and fails above 10 MB. ⛔ see platform limits. | n/a | warn 7.5, fail 10 MB | warn 7, fail 10 MB | warn 7.5, fail 10 MB |
+| Refusing Node builtins that break the script | ✅ | The build fails on `node:child_process`, `node:vm`, `node:worker_threads`, `node:constants` and `node:path/win32`, and turns bare builtin names into `node:` names. ⛔ see platform limits. | n/a | aliases bare names | fails the build | aliases bare names |
 
 ## Extra
 
@@ -93,7 +93,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Storage regions and replicas | ✅ | The pull zone reads from the storage zone and its replicas. | n/a | `storageHost` | `BUNNY_STORAGE_HOST` | replicas |
 | Deploy folders and rollback | ✅ | Edge rules serve `deploys/<id>` and name it in `X-Bunny-Deploy`; the script strips the folder. Optional. | n/a | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` |
 | Build manifest for deploy tooling | ✅ | `.bunny/build.json` in bunny.net's shape, `type: "middleware"`, our fields under `astroAdapterBunny`. Untested with bunny.net's CLI. | n/a | `.bunny/build.json` | `.bunny/build.json` | `.bunny/build.json` |
-| `waitUntil` and platform context in `locals` | ❌ | | Cloudflare, Netlify | `locals.runtime` | no | `locals.runtime` |
+| `waitUntil` and platform context in `locals` | 🟡 | The script hands `Bunny.v1.waitUntil` to Astro, which passes it to a cache provider; it exists at runtime. No platform context in `locals`: code can call the `Bunny` global itself. | Cloudflare, Netlify | `locals.runtime` | no | `locals.runtime` |
 | Fonts API | ✅ | A local font served from `/_astro/fonts/` as `font/woff2`. | ➖ | | | used |
 | Edge middleware mode | ➖ | Middleware runs inside the script. | Vercel, Netlify | no | no | no |
 
@@ -109,7 +109,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 | `hybridOutput` | `stable` | ✅ | | all stable |
 | `serverOutput` | `stable` | ✅ | | all stable |
 | `envGetSecret` | `stable` | ✅ | `getSecret()` reads script variables. | all stable |
-| `sharpImageService` | `limited` | 🟡 | Sharp at build only. The build logs a warning; an object with a `message` could say why. | Cloudflare limited, others stable |
+| `sharpImageService` | `unsupported`, with a message | ✅ | Astro only checks it when Sharp is the runtime service, as with `imageService: 'custom'`; the message says the build will fail and to use `'compile'`. | Cloudflare limited, others stable |
 | `i18nDomains` | `unsupported` | ❌ | Needs the visitor host per domain and no prerendered pages. Untested. | Node, Vercel, Cloudflare experimental |
 
 ### `adapterFeatures`
@@ -137,6 +137,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 
 - ⛔ **Script size and startup:** 10 MB maximum and a 500 ms startup budget. Around 7.5 to 7.8 MB a script stopped starting and answered 400. One `<Code>` component adds about 11 MB of Shiki.
 - ⛔ **No `import()` at runtime:** every specifier tried failed, so all code must be in one file.
+- ⛔ **Client hooks:** `onClientRequest` and `onClientResponse` only run with the pull zone's "before cache" execution (`EdgeScriptExecutionPhase: 2`); without it they are skipped silently.
 - ⛔ **Node builtins:** only `node:` names resolve. `child_process`, `vm`, `worker_threads`, `constants` and `path/win32` make the script answer 400 on every request. `node:fs` is empty per isolate.
 - ⛔ **No native binaries:** Sharp cannot run at runtime.
 - ⛔ **Bunny Optimizer** answers 523 on script-backed pull zones.
