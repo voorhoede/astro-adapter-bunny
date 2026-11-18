@@ -20,17 +20,27 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 
 ## How the code is organized
 
+Build-time code runs in Node while Astro builds; runtime code is bundled into the Edge Script.
+
 | Module | What it does |
 | --- | --- |
 | `src/index.ts` | The Astro integration: config overrides, the build output, and bundling the server into `dist/index.js` when Astro built one. |
-| `src/script.ts` | The Edge Script: asks storage first for GET and HEAD and renders on a 404, renders other methods directly. |
-| `src/lib/bundle-server.ts` | The Rolldown pass that turns Astro's server entry into one file. |
-| `src/lib/render-app.ts` | Renders a request with Astro, with the visitor's URL and address, and sets `private, no-store` when the response has no `Cache-Control`. |
-| `src/lib/deploy-folder.ts` | Strips the deploy folder an edge rule puts in front of the path, and adds it back for storage, or adds the folder bunny.net's CLI names. |
-| `src/lib/needs-trailing-slash-redirect.ts` | Tells whether a path needs Astro's trailing slash redirect before it goes to storage. |
-| `src/lib/print-redirects.ts` | Writes Astro's `redirects` in the `_redirects` format for `dist/_redirects`. |
-| `src/lib/write-build-manifest.ts` | Writes `.bunny/build.json`, the build manifest in bunny.net's shape. |
-| `src/lib/serve-static-asset.ts` | Rewrites a request for a prerendered page to its `.html` file with `build.format` `'file'` or `'preserve'`. |
+| `src/lib/build/lib/adapter.ts` | What the adapter declares to Astro, and the server build config that resolves Deno first. |
+| `src/lib/build/lib/image-service.ts` | Turns the `imageService` option into Astro's build and runtime image services. |
+| `src/lib/build/lib/bundle-server.ts` | The Rolldown pass that turns Astro's server entry into one file, with Node builtins as `node:` imports. |
+| `src/lib/build/lib/check-script.ts` | Fails the build on a script over 10 MB or with a builtin bunny.net cannot run, and warns above 7 MB. |
+| `src/lib/build/lib/print-redirects.ts` | Writes Astro's `redirects` in the `_redirects` format. |
+| `src/lib/build/lib/print-headers.ts` | Writes each prerendered page's Content-Security-Policy in the `_headers` format. |
+| `src/lib/build/lib/write-static-files.ts` | Appends the redirects and headers to `_redirects` and `_headers` in the client build, after a site's own lines. |
+| `src/lib/build/lib/write-script.ts` | Bundles, checks and writes `dist/index.js`. |
+| `src/lib/build/lib/write-build-manifest.ts` | Writes `.bunny/build.json`, the build manifest in bunny.net's shape. |
+| `src/lib/runtime/script.ts` | The Edge Script: asks storage first for GET and HEAD and renders on a 404, renders other methods directly, and answers 405 for those on stored paths. |
+| `src/lib/runtime/lib/render-app.ts` | Renders a request with Astro, with the visitor's request and address, and sets `private, no-store` when the response has no `Cache-Control`. |
+| `src/lib/runtime/lib/bunny-helpers.ts` | Translates between bunny.net and Astro: the visitor's request, the storage request and response, the client address, and whether a path is stored. |
+| `src/lib/runtime/lib/deploy-folder.ts` | Strips the deploy folder an edge rule puts in front of the path, and adds it back for storage, or adds the folder bunny.net's CLI names. |
+| `src/lib/runtime/lib/needs-trailing-slash-redirect.ts` | Tells whether a path needs Astro's trailing slash redirect before it goes to storage. |
+| `src/lib/runtime/lib/cache-control.ts` | The `Cache-Control` for rendered responses and stored files. |
+| `src/lib/runtime/lib/content-type.ts` | The content type for extensions storage answers as `application/octet-stream`. |
 
 ## Tests
 

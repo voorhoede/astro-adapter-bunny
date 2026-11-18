@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-28, rewritten 2026-11-15 and 2026-11-17
+date: 2026-10-28, rewritten 2026-11-15, 2026-11-17 and 2026-11-18
 ---
 
 # The pull zone serves stored files
@@ -31,20 +31,20 @@ Measured on bunny.net between 2026-11-09 and 2026-11-13, through a pull zone wit
 
 ## Decision outcome
 
-On-demand routes first, so an on-demand GET renders without waiting for a 404 from storage. A request an on-demand route matches is rendered by Astro without asking storage. Every other GET and HEAD goes to the pull zone, and a 404 from storage is rendered by Astro, which answers its 404 page. Other methods never reach storage: a prerendered page or a stored asset answers 405 with `Allow: GET, HEAD`, anything else is rendered.
+Storage first, so a stored file wins over an on-demand route, as in the Node adapter, and the script needs no route check before it asks storage. Every GET and HEAD goes to the pull zone, except a path in the wrong trailing slash form, which Astro redirects. A 404 from storage is rendered by Astro: the on-demand route if one matches, otherwise its 404 page. Other methods never reach storage: a public file, an asset or a prerendered page answers 405 with `Allow: GET, HEAD`, anything else is rendered.
 
 - **Prerendered routes are rewritten to their file.** When `app.match(request, true)` returns a prerendered route that is not an endpoint, and the build format is `'file'`, or `'preserve'` for a route that is not an index route, the path without its trailing slash gets `.html`. `/` and every other path pass unchanged, so the pull zone resolves `index.html` and stored files itself.
-- **Redirects are rendered, fallbacks are files.** A redirect route answers 301 or 308 from the script. An i18n fallback to a prerendered page answers the meta refresh page Astro wrote.
-- **A prerendered 404 page comes from storage.** When `404.astro` is prerendered, the script passes on storage's 404, which carries the page through `Custom404FilePath`. A route that answers its own 404 keeps it.
+- **Redirects are rendered, fallbacks are files.** A redirect route answers 301 or 308 from the script: storage has no file for it, so its 404 reaches Astro with the redirect route, which is not rewritten to `.html`. An i18n fallback to a prerendered page answers the meta refresh page Astro wrote.
+- **A prerendered 404 page comes from storage.** When `404.astro` is prerendered and no on-demand route matches the path, the script passes on storage's 404, which carries the page through `Custom404FilePath`. A route that answers its own 404 keeps it.
 - **A prerendered 404 or 500 page that Astro asks for comes through the pull zone.** The script gives Astro a fetch that requests the page's path on the visitor's host, so the request passes the edge rules and the script like any other.
 - **A deploy folder is optional.** When an edge rule serves `deploys/<id>` and names it in `X-Bunny-Deploy`, the script strips that folder before routing and adds it back for storage. Without it, files come from the root.
 
 ### Consequences
 
 - Good: `'file'` and `'preserve'` work, with one storage request per page and no file list.
-- Good: an on-demand GET renders without a request to storage first.
-- Bad: an on-demand route wins over a stored file on the same path, unlike in the Node adapter, so a file an integration writes after the build under an on-demand catch-all is never served.
-- Bad: without a deploy folder, a file left in storage by an earlier build stays reachable on paths no on-demand route answers, so a deploy to the root has to remove files the build no longer has.
+- Good: a stored file wins over an on-demand route on the same path, as in the Node adapter, so a file an integration writes after the build is served, also under an on-demand catch-all.
+- Bad: every on-demand GET waits for a 404 from storage before it renders. The added time is not measured.
+- Bad: without a deploy folder, a file left in storage by an earlier build wins over an on-demand route that replaced it, so a deploy to the root has to remove files the build no longer has.
 - Bad: when a rewritten path has no file, the 404 page renders with the rewritten request, so its `Astro.url` ends in `.html`.
 - Bad: an i18n fallback to a prerendered page answers 200 with HTML.
 - Bad: a prerendered 404 page needs `Custom404FilePath` on the storage zone for a missing stored file.
@@ -52,4 +52,4 @@ On-demand routes first, so an on-demand GET renders without waiting for a 404 fr
 
 ### Confirmation
 
-The test app on bunny.net serves prerendered pages, public files, `/_astro/*` and late files from storage with `build.format` `'directory'`, `'file'` and `'preserve'`, renders an on-demand catch-all over a late file on its path, renders on-demand routes, and answers Astro's 404 page for a missing path, from the root and from a deploy folder.
+The test app on bunny.net serves prerendered pages, public files, `/_astro/*` and late files from storage with `build.format` `'directory'`, `'file'` and `'preserve'`, serves a late file under an on-demand catch-all, renders on-demand routes, and answers Astro's 404 page for a missing path, from the root and from a deploy folder.

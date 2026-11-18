@@ -23,7 +23,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Fully static site | ✅ | Builds `dist/client` only, no script; with `server:defer` it still gets one. Served live by a pull zone on the storage zone, with `Custom404FilePath: /404.html` and two edge rules for `Cache-Control`. | all | yes | yes | yes |
 | `public/` files and `/_astro/*` | ✅ | `/_astro/*` gets one year immutable. | all | yes | yes | yes |
 | Files without extension (`/CNAME`) | ✅ | Served as stored, with `directory`, `file` and `preserve`. | Node yes | yes, with file list | no | yes, with file list |
-| Files written after the build (sitemap, service worker) | 🟡 | Served from storage, unless an on-demand route matches the same path: `/docs/late.txt` renders `docs/[...path]`, not the file. | n/a | breaks with file list | yes, storage first | breaks with file list |
+| Files written after the build (sitemap, service worker) | ✅ | GET and HEAD try storage first, so a file wins over an on-demand route: `/docs/late.txt` served the file, not `docs/[...path]`. | n/a | breaks with file list | yes, storage first | breaks with file list |
 | On-demand `404.astro` | ✅ | | all | yes | yes | yes |
 | Prerendered `404.astro` | ✅ | From storage through `Custom404FilePath`, which the deploy tool sets. When Astro answers the 404 itself, such as for a POST, the script fetches the page through the pull zone. | Node, Cloudflare read it directly | yes | yes | yes |
 | On-demand `500.astro` | ✅ | | all | yes | yes | yes |

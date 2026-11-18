@@ -50,7 +50,7 @@ Paths are relative to the project root and use forward slashes. bunny.net's cont
 
 Uploading before publishing means new hashed assets exist before a new script or page asks for them. A rollback publishes the earlier script, points the rewrite rule and the 404 page back at its folder, then purges; no file moves.
 
-A deploy to the root of the storage zone, without the folder rules, also works. Then every stored file is publicly readable, and the tool has to remove files the build no longer has: the script sends every GET and HEAD that no on-demand route matches to storage, so a file left over from an earlier build stays reachable on its path.
+A deploy to the root of the storage zone, without the folder rules, also works. Then every stored file is publicly readable, and the tool has to remove files the build no longer has: the script asks storage first for every GET and HEAD, so a file left over from an earlier build wins over an on-demand route on the same path.
 
 ## Deploy folders
 

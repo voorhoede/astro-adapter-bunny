@@ -26,7 +26,7 @@ Measured on bunny.net between 2026-11-09 and 2026-11-10, with a storage zone in 
 
 ## Decision outcome
 
-Only middleware. `bunny()` has no option for the script type, and `src/script.ts` registers two hooks through `@bunny.net/edgescript-sdk`:
+Only middleware. `bunny()` has no option for the script type, and `src/lib/runtime/script.ts` registers two hooks through `@bunny.net/edgescript-sdk`:
 
 - **A deploy folder** that an edge rule puts in front of the path, named in `X-Bunny-Deploy`, is stripped before anything else and added back for storage.
 - **A path in the wrong trailing slash form** is rendered by Astro, which redirects it, before storage is asked.
