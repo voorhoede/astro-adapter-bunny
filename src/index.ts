@@ -68,7 +68,13 @@ export default function bunny({
             serverOutput: "stable",
             i18nDomains: "unsupported",
             envGetSecret: "stable",
-            sharpImageService: "limited",
+            // Astro only checks this when Sharp is the runtime service, which takes imageService 'custom'.
+            sharpImageService: {
+              support: "unsupported",
+              message:
+                "bunny.net Edge Scripts cannot run Sharp, so the build will fail. Use imageService 'compile' to run Sharp at build only.",
+              suppress: "default",
+            },
           },
         });
       },
