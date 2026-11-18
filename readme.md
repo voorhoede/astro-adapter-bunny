@@ -17,6 +17,20 @@ export default defineConfig({
 });
 ```
 
+## Options
+
+`imageService` sets how `<Image>` is transformed. Edge Scripts cannot run Sharp, so on-demand pages get the original image unless the project brings a runtime service of its own.
+
+| Value | Prerendered pages | On-demand pages |
+| --- | --- | --- |
+| `'compile'` (default) | The project's `image.service`, Sharp unless set | Original, through `/_image` |
+| `'passthrough'` | Original | Original, through `/_image` |
+| `'custom'` | The project's `image.service` | The project's `image.service`; it has to run in an Edge Script |
+
+```ts
+adapter: bunny({ imageService: 'passthrough' }),
+```
+
 ## License
 
 [ISC License](license.md)

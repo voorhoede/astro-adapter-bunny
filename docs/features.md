@@ -81,7 +81,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `astro:env` public client variables | ✅ | Inlined at build. | all | | | |
 | `env.validateSecrets` | ✅ | The build fails without the secret in its environment, and never writes the value into the script. At runtime a missing secret answers 500 on rendered pages; stored files still serve. | all | | | |
 | Remote images (`image.remotePatterns`) | 🟡 | `/_image` fetches and serves the original, with `content-type: image/undefined`. | all | | | |
-| A project's own `image.service` | ❌ | The adapter always sets Sharp at build and no-op at runtime, so a custom service is lost. Kept simple on purpose for now. | Cloudflare and Netlify respect `custom` | `false` keeps it | `custom` keeps it | `false` keeps it |
+| A project's own `image.service` | ✅ | `imageService: 'compile'` (the default) keeps its build service and uses no-op at runtime; `'custom'` keeps it at runtime too, where Sharp cannot run. Checked by build, not live. | Cloudflare and Netlify respect `custom` | `false` keeps it | `custom` keeps it | `false` keeps it |
 | A project's own `vite.ssr` settings | ✅ | Merged through `updateConfig`. With its own `noExternal` and `resolve.conditions`, the script still gets the Deno variant of the SDK. | merge | merge | merge | merge |
 | Custom fetch entrypoint (`src/fetch.ts`, Astro 7) | ✅ | Runs for rendered requests. | untested | | | |
 | Live content collections | ✅ | A fresh value on every request. | | | | |
