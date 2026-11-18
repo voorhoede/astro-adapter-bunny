@@ -32,7 +32,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `redirects` to a prerendered page | ✅ | Real 301/308 from the script (`build.redirects: false`). `dist/client/_redirects` lists them for edge rules, which a static site needs from its deploy tool. | all real | real | real | real |
 | `Astro.redirect()` | ✅ | | all | yes | yes | yes |
 | `Astro.rewrite()` to an on-demand page | ✅ | Also to an on-demand `/404`. | all | yes | yes | yes |
-| `Astro.rewrite()` to a prerendered page | ❌ | Answers 500: the page is not in the script. | untested | throws on prerendered 404 | untested | throws on prerendered 404 |
+| `Astro.rewrite()` to a prerendered page | ➖ | Astro throws `ForbiddenRewrite` for every server adapter, which answers 500. Render the target on demand with `export const prerender = false`, or use `Astro.redirect()`. | untested | throws on prerendered 404 | untested | throws on prerendered 404 |
 | Injected routes (`injectRoute()`) | ✅ | | all | yes | yes | yes |
 | `trailingSlash` | ✅ | The script redirects stored paths to the configured form, as Astro does for rendered ones. A static site needs edge rules; `'never'` with a query string loops there. | Node, Vercel | no | yes | no |
 | Cookies | ✅ | Needs the pull zone's "disable cookies" off. | all | yes | yes | yes |
