@@ -46,7 +46,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Content collections | ✅ | Prerendered list and on-demand entries. | ➖ | untested | untested | untested |
 | `import.meta.env` at runtime | ✅ | Inlined at build, as Astro does. `process.env` reads script variables at runtime. | all | yes | yes | yes |
 | Range requests | ✅ | The pull zone answers 206 with the right bytes, also on a cache miss. `.svg` answered 200 with the whole file. | Node yes | yes | no | yes |
-| Conditional requests (`If-None-Match`) | 🟡 | Stored files carry an `ETag` and `Last-Modified`, but a matching `If-None-Match` or `If-Modified-Since` still answered 200 with the body. A 304 from the script needs `onClientResponse`, which only runs with the pull zone's "before cache" execution, so the script would run on every request, cache hits included. | Node yes | yes | no | yes |
+| Conditional requests (`If-None-Match`) | 🟡 | A cached file answers 304 from the CDN itself. A file with `max-age=0`, which the CDN does not keep, answers 200 with the body. A 304 from the script worked only with the pull zone's "before cache" execution, which runs the script on every request, cache hits included, so the adapter does not do it (measured on 2026-11-18). | Node yes | yes | no | yes |
 | Path traversal (`/..%2f..%2f`) | ✅ | bunny.net answers 400 before the script. | all | yes | yes | yes |
 | Request bodies | ✅ | A 100 MB POST reached an endpoint and came back. Astro limits actions and server islands to 1 MB itself. | Node limits to 1 GiB | untested | untested | untested |
 | Compression | ✅ | gzip on HTML and JSON, from the pull zone. No brotli. | platform | | | |
