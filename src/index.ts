@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendStaticFile } from "./lib/append-static-file.ts";
 import { bundleServer } from "./lib/bundle-server.ts";
+import { checkScript } from "./lib/check-script.ts";
 import {
   type ImageServiceOption,
   resolveImageService,
@@ -90,7 +91,7 @@ export default function bunny({
       "astro:build:generated": ({ routeToHeaders }) => {
         headers = printHeaders(routeToHeaders);
       },
-      "astro:build:done": async () => {
+      "astro:build:done": async ({ logger }) => {
         const clientDir = fileURLToPath(config.build.client);
         const redirects = printRedirects(routes, config.base);
         if (redirects) {
@@ -104,11 +105,11 @@ export default function bunny({
           const outFile = join(fileURLToPath(config.outDir), "index.js");
           const serverLocation = fileURLToPath(config.build.server);
           const serverEntryFile = config.build.serverEntry;
-          const bundledServerCode = await bundleServer(
-            serverLocation,
-            serverEntryFile,
-          );
-          await writeFile(outFile, bundledServerCode);
+          const script = await bundleServer(serverLocation, serverEntryFile);
+          const { errors, warnings } = checkScript(script);
+          for (const warning of warnings) logger.warn(warning);
+          if (errors.length) throw new Error(errors.join("\n"));
+          await writeFile(outFile, script.code);
         }
 
         await writeBuildManifest(config, {
