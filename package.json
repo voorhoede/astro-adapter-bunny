@@ -10,6 +10,9 @@
     "url": "git+https://github.com/voorhoede/astro-adapter-bunny.git"
   },
   "type": "module",
+  "imports": {
+    "#package.json": "./package.json"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./script.ts": "./src/script.ts"

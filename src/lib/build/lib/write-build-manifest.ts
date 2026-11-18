@@ -1,4 +1,5 @@
 import type { AstroConfig } from "astro";
+import adapterPackage from "#package.json" with { type: "json" };
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, relative, sep } from "node:path";
@@ -17,9 +18,6 @@ export async function writeBuildManifest(
   const outDir = fileURLToPath(config.outDir);
   const fromRoot = (path: string) => relative(root, path).split(sep).join("/");
 
-  const adapter = await readJson(
-    new URL("../../package.json", import.meta.url),
-  );
   const astro = await readJson(
     createRequire(join(root, "package.json")).resolve("astro/package.json"),
   );
@@ -47,7 +45,7 @@ export async function writeBuildManifest(
 
   const manifest = {
     manifestVersion: 1,
-    adapter: { package: adapter.name, version: adapter.version },
+    adapter: { package: adapterPackage.name, version: adapterPackage.version },
     framework: { name: "astro", version: astro.version },
     kind: hasServer ? "ssr" : "static",
     ...server,
