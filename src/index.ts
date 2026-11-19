@@ -48,7 +48,10 @@ export default function bunny({
       }) => {
         config = resolvedConfig;
 
-        const adapterSettings = adapter(buildOutput);
+        const adapterSettings = adapter(
+          buildOutput,
+          process.env.BUNNY_DEPLOY_ID,
+        );
         setAdapter(adapterSettings);
       },
       "astro:routes:resolved": ({ routes: resolvedRoutes }) => {

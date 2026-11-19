@@ -7,6 +7,11 @@ import {
   methodNotAllowed,
   toStorageRequest,
 } from "./lib/bunny-helpers.ts";
+import {
+  fromOtherDeployResponse,
+  isOtherDeploy,
+  toOtherDeployRequest,
+} from "./lib/deploy-id.ts";
 import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
 import { renderApp } from "./lib/render-app.ts";
 
@@ -15,6 +20,10 @@ const app = createApp();
 BunnySDK.net.http
   .servePullZone()
   .onOriginRequest(({ request }) => {
+    if (isOtherDeploy(request, app)) {
+      return toOtherDeployRequest(request);
+    }
+
     if (!["GET", "HEAD"].includes(request.method)) {
       if (isStoredPath(request, app)) {
         return methodNotAllowed();
@@ -30,6 +39,10 @@ BunnySDK.net.http
     return toStorageRequest(request, app);
   })
   .onOriginResponse(({ request, response }) => {
+    if (isOtherDeploy(request, app)) {
+      return fromOtherDeployResponse(response);
+    }
+
     if (response.status === 404 && !isStoredNotFoundPage(request, app)) {
       return renderApp(request, app);
     }

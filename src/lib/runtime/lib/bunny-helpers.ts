@@ -3,6 +3,7 @@ import type { BaseApp } from "astro/app";
 import { withStoredCacheControl } from "./cache-control.ts";
 import { withContentType } from "./content-type.ts";
 import { addDeployFolder, removeDeployFolder } from "./deploy-folder.ts";
+import { FORWARD_SECRET_HEADER, getForwardedHost } from "./deploy-id.ts";
 
 /**
  * Extracts the client IP address from the `x-real-ip` header.
@@ -26,12 +27,15 @@ export function toVisitorRequest(originRequest: Request): Request {
     ?.trim();
   if (protocol) url.protocol = protocol;
 
-  const host = request.headers.get("host");
+  const host = getForwardedHost(request) ?? request.headers.get("host");
   if (host) url.host = host;
 
   url.port = "";
 
-  return new Request(url, request);
+  const visitorRequest = new Request(url, request);
+  // A page that reads or echoes the request headers would leak the secret. It is deleted in place: building another Request from this one took the body from the origin request, which this function reads more than once, and every POST answered 500.
+  visitorRequest.headers.delete(FORWARD_SECRET_HEADER);
+  return visitorRequest;
 }
 
 /**
