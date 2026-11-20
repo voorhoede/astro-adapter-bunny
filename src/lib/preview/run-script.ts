@@ -3,19 +3,16 @@
  * `astro preview`. Started by `preview.ts` with the script, the client folder,
  * a hostname and a port.
  *
- * Outside bunny.net the edge script SDK serves the pull zone itself, on
- * 127.0.0.1:8080, with `https://bunny.net` as its origin when the script names
- * none. This file binds that server where Astro asked for it, adds the headers
- * bunny.net sets on every request, and answers the origin's requests from the
- * client folder, the way the storage zone answers them.
+ * The script registers its hooks with bunny.net through a `Bunny` global. This
+ * file provides that global, hands the hooks to the edge script SDK's own pull
+ * zone handler, and serves it where Astro asked for it, with a stand-in for the
+ * storage zone as its origin.
  */
+import { net } from "@bunny.net/edgescript-sdk";
 import { extname, join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 
-type ServeHandler = (
-  request: Request,
-  info: { remoteAddr: { hostname: string } },
-) => Response | Promise<Response>;
+type Middlewares = Parameters<typeof net.http.internal_buildPullZoneHandler>[1];
 
 declare const Deno: {
   args: string[];
@@ -24,8 +21,15 @@ declare const Deno: {
   readFile(path: string): Promise<Uint8Array<ArrayBuffer>>;
   stat(path: string): Promise<{ isFile: boolean; isDirectory: boolean }>;
   serve(
-    options: { port: number; hostname: string; onListen?: () => void },
-    handler: ServeHandler,
+    options: {
+      port: number;
+      hostname: string;
+      onListen?: (addr: { port: number }) => void;
+    },
+    handler: (
+      request: Request,
+      info: { remoteAddr: { hostname: string } },
+    ) => Response | Promise<Response>,
   ): unknown;
 };
 
@@ -33,9 +37,6 @@ const [script, clientDir, hostname, port] = Deno.args;
 if (!script || !clientDir || !hostname || !port) {
   throw new Error("Usage: run-script.ts <script> <client dir> <hostname> <port>");
 }
-
-// The origin the SDK falls back to when the script names none.
-const SDK_ORIGIN = "bunny.net";
 
 // Storage sets these itself. The script gives other extensions their type.
 const CONTENT_TYPES: Record<string, string> = {
@@ -95,43 +96,53 @@ async function fromStorage(request: Request): Promise<Response> {
   });
 }
 
-const nativeFetch = globalThis.fetch;
-globalThis.fetch = (input, init) => {
-  const request = new Request(input, init);
-  if (new URL(request.url).hostname === SDK_ORIGIN) return fromStorage(request);
-  return nativeFetch(request);
-};
-
-const nativeServe = Deno.serve.bind(Deno);
-Deno.serve = (_options, handler) =>
-  nativeServe(
+const storageOrigin = await new Promise<string>((resolve) => {
+  Deno.serve(
     {
-      hostname: hostname!,
-      port: Number(port),
-      // preview.ts waits for this line before it reports the server as started.
-      onListen: () => console.log("ready"),
+      hostname: "127.0.0.1",
+      port: 0,
+      onListen: (addr) => resolve(`http://127.0.0.1:${addr.port}`),
     },
-    (request, info) => {
-      const headers = new Headers(request.headers);
-      headers.set("x-forwarded-proto", "http");
-      headers.set("x-real-ip", info.remoteAddr.hostname);
-      return handler(new Request(request, { headers }), info);
-    },
+    fromStorage,
   );
+});
 
-// `astro preview stop` ends the Node process without stopping this one, which
-// kept the port. Its end closes stdin.
-void Deno.stdin.readable.pipeTo(new WritableStream()).finally(() => Deno.exit());
-
-await import(pathToFileURL(script).href);
-
-// Set only after the import: with a `Bunny` global the SDK registers its hooks
-// with bunny.net instead of serving them, and `renderApp` calls
-// `Bunny.v1.waitUntil` at runtime.
+let middlewares: Middlewares | undefined;
 Object.assign(globalThis, {
   Bunny: {
     v1: {
+      registerMiddlewares: (registered: Middlewares) => {
+        middlewares = registered;
+      },
       waitUntil: (promise: Promise<unknown>) => promise.catch(console.error),
     },
   },
 });
+
+await import(pathToFileURL(script).href);
+if (!middlewares) throw new Error(`${script} registered no pull zone hooks.`);
+
+const pullZone = net.http.internal_buildPullZoneHandler(
+  storageOrigin,
+  middlewares,
+  "deno",
+);
+
+Deno.serve(
+  {
+    hostname,
+    port: Number(port),
+    // preview.ts waits for this line before it reports the server as started.
+    onListen: () => console.log("ready"),
+  },
+  (request, info) => {
+    const headers = new Headers(request.headers);
+    headers.set("x-forwarded-proto", "http");
+    headers.set("x-real-ip", info.remoteAddr.hostname);
+    return pullZone(new Request(request, { headers }));
+  },
+);
+
+// `astro preview stop` ends the Node process without stopping this one, which
+// kept the port. Its end closes stdin.
+void Deno.stdin.readable.pipeTo(new WritableStream()).finally(() => Deno.exit());
