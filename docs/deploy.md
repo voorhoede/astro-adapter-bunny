@@ -74,6 +74,40 @@ Measured on bunny.net on 2026-11-15, on a pull zone with the middleware script:
 
 Untested: these rules on a site without a script. The storage zone 404 page with the script was measured from the root, not from a deploy folder.
 
+## Skew protection
+
+Optional, for sites with a script. A page that is open keeps asking for late assets, server islands, actions and prefetches after a new release. Skew protection lets the release that served the page answer them.
+
+**Build.** Set `BUNNY_DEPLOY_ID` to the release id, the `<id>` of its deploy folder. Astro then adds `?dpl=<id>` to every asset URL and sends `x-deployment-id: <id>` with server island, action and prefetch requests. Without it, nothing is tagged and the script ignores both.
+
+**A pull zone per kept release.** Each release that stays reachable keeps its own pull zone on the same storage zone, with the deploy folder rules for its own `<id>`, the pull zone settings below, and its own middleware script running that release's `dist/index.js`. Give that script the secret `BUNNY_FORWARD_SECRET`, a random value per release.
+
+**On the pull zone with the site's hostname,** the one serving the newest release:
+
+| Rule or setting | Trigger | Action |
+| --- | --- | --- |
+| Kept release rule, one per kept release | Query string `*dpl=<id>*`, or request header `x-deployment-id` equal to `<id>` (match any) | Origin URL (`ActionType` 2) to the kept release's pull zone, `https://<its hostname>`. Extra action: set request header `x-bunny-forward-secret` to that release's secret. |
+| Rewrite rule | As in the deploy folders, plus for each kept id a query string and a request header trigger in "match none" mode (match all) | As in the deploy folders. |
+| `QueryStringVaryParameters` | | `dpl` |
+
+The newest release's script passes a request tagged with another id to the origin for every method, sets `x-forwarded-host` to the visitor's host, and leaves the response alone. A kept release's script takes the host from `x-forwarded-host` only when `x-bunny-forward-secret` equals its `BUNNY_FORWARD_SECRET`, and removes the secret header before Astro sees the request. So `Astro.url` names the site, and Astro's origin check passes for an action called from the old page.
+
+A full page load is not pinned, and neither is a plain HTML form post (`<form method="post">`, also for an action), which carries no header: both answer from the newest release.
+
+Measured on bunny.net on 2026-11-18 and 2026-11-19, with release A on its own pull zone and B on the main one:
+
+- An asset with `?dpl=A`, a server island fetch and an action called with `x-deployment-id: A` answered with A's code and files. Without the tag they answered with B's.
+- An action called with `x-deployment-id: A` and another site's `Origin` answered 403.
+- On A's pull zone directly, `x-forwarded-host` without the secret, or with a wrong one, was ignored. A page that echoes every request header did not show the secret.
+- A new pull zone overrides cache-control for 30 days and ignores the query string by default. A kept release's pull zone needs the settings below, or one rendered response is served for every query.
+- "Forward Host Header" on a pull zone with storage as its origin stayed off, and setting `Host` on the rule answered 508 Loop Detected: a hostname belongs to one pull zone.
+
+Limits:
+
+- Every kept release takes a pull zone, a script and one edge rule from the 50, and two of the 5 patterns a trigger takes on the rewrite rule.
+- A script secret reads back empty from the API, so the tool sets it in the script and in the rule in one go, or makes a new one.
+- A request tagged only by the header shares the cache key of the newest release. Rendered responses are `private, no-store` unless a route sets otherwise.
+
 ## Pull zone settings
 
 Required for every site with a script:

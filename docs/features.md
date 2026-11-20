@@ -88,7 +88,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `logger` config and script logs | 🟡 | Untested: bunny.net shows script logs in its dashboard only, not through the API. | Node, Vercel | | | |
 | Custom `outDir` | ✅ | The script lands in `<outDir>/index.js`, the files in `<outDir>/client`. `build.client` and `build.server` untested. | all | | | |
 | `experimental.redirectPage` (`src/pages/3xx.astro`) | 🟡 | Works when `3xx.astro` sets `prerender = true`. With `output: 'server'` and without it, the build falls back to Astro's own page. | | | | |
-| `security.allowedDomains` | ➖ | The script takes the host from `Host`. A request with `X-Forwarded-Host: evil.example` kept the real host in `Astro.url`. | all | | | |
+| `security.allowedDomains` | ➖ | The script takes the host from `Host`, or from `X-Forwarded-Host` only next to its `BUNNY_FORWARD_SECRET`. A request with `X-Forwarded-Host: evil.example` kept the real host in `Astro.url`. | all | | | |
 | Image service at runtime (Bunny Optimizer) | ⛔ | Optimizer answered 523 on script-backed pull zones. | Vercel, Netlify, Cloudflare | option, warns | no | option, unusable |
 | Storage regions and replicas | ✅ | The pull zone reads from the storage zone and its replicas. | n/a | `storageHost` | `BUNNY_STORAGE_HOST` | replicas |
 | Deploy folders and rollback | ✅ | Edge rules serve `deploys/<id>` and name it in `X-Bunny-Deploy`; the script strips the folder. Optional. | n/a | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` |
@@ -129,7 +129,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 | `entrypointResolution` | `auto` | ✅ | | all `auto` |
 | `serverEntrypoint` | `astro-adapter-bunny/script.ts` | ✅ | | all |
 | `previewEntrypoint` | not set | ❌ | `astro preview` does not work. | Node, Cloudflare |
-| `client.internalFetchHeaders`, `client.assetQueryParams` | not set | ❌ | Used for skew protection, so a page from one release does not load assets or islands from another. Relevant, since files sit in the zone root. | Vercel opt-in, Netlify automatic |
+| `client.internalFetchHeaders`, `client.assetQueryParams` | with `BUNNY_DEPLOY_ID` | ✅ | `x-deployment-id` and `?dpl=<id>`, for skew protection. Assets, server islands and actions of a kept release answered from its own pull zone. Needs a deploy tool that keeps a pull zone per release. | Vercel opt-in, Netlify automatic |
 | Custom prerenderer (`setPrerenderer()`) | not set | ➖ | Prerendering runs in Node, which works. | Cloudflare (workerd) |
 | `args`, `exports` | not set | ➖ | Deprecated. | |
 

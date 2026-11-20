@@ -27,6 +27,12 @@ Measured on bunny.net on 2026-11-18, with release A in `deploys/A` and B in `dep
 - B's script set `x-forwarded-host` to the visitor's host, and the rule to A's pull zone set `x-bunny-forward-secret` to a value held only in A's script secret `BUNNY_FORWARD_SECRET`. A's `Astro.url` then named the main hostname, a tagged form POST with the main `Origin` passed the origin check, and one with another `Origin` answered 403. Directly on A's pull zone, a spoofed `x-forwarded-host` without the secret, or with a wrong one, was ignored. A page that echoes every request header did not show the secret.
 - A script secret reads back empty from the API once set.
 
+Measured on 2026-11-19, with an island and an action that name their release:
+
+- A server island fetch with `x-deployment-id: A`, as A's page sends it, answered A's island, and without the header B's. Both answered `private, no-store` and a cache miss on repeat.
+- An action called with `x-deployment-id: A` and the main `Origin` answered A's handler, without the header B's, and with another `Origin` 403.
+- A plain HTML form post to an action carries no header and answered B's handler.
+
 ## Considered options
 
 - **Do nothing, and document it.** After every deploy, a page that is open loses its late assets and islands until it reloads.
@@ -50,7 +56,8 @@ Pin the whole release, and pass the visitor's host with a secret per kept releas
 
 ### Consequences
 
-- Good: a page that is open keeps its assets, islands, actions and form posts working after a deploy, up to the number of kept releases.
+- Good: a page that is open keeps its assets, server islands and actions called from the page working after a deploy, up to the number of kept releases.
+- Bad: a plain HTML form post from an open page, including one to an action, answers from the newest release, as a full page load does.
 - Good: a plain deploy with the bunny.net CLI keeps working. Skew protection is an addition for a deploy tool that manages the zones.
 - Good: the secret never reaches the browser or the page, and an open-source repository or its CI holds nothing beyond the API key the deploy already needs.
 - Bad: every kept release costs a pull zone, a script, its script variables (at most 128 per script), and an edge rule from the 50 a pull zone takes. The rule that serves the newest release excludes each kept id, at most 5 patterns per trigger.
@@ -61,4 +68,4 @@ Pin the whole release, and pass the visitor's host with a secret per kept releas
 
 ### Confirmation
 
-Partly measured, as listed above. Before this is accepted: on bunny.net, a page of an older release loads a late asset, renders a server island and posts an action with that release's code, through a deploy tool that creates and removes the zones, rules and secrets.
+Measured by hand, as listed above: a late asset, a server island and an action of an older release answered with that release's code. Before this is accepted: the same through a deploy tool that creates and removes the zones, rules and secrets.
