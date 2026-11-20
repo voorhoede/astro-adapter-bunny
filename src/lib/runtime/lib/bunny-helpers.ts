@@ -12,12 +12,24 @@ export function getClientAddress(request: Request): string | undefined {
   return getValidatedIpFromHeader(request.headers.get("x-real-ip"));
 }
 
+// Building a Request from another moves its body, and the checks and renderApp each ask for the visitor's request. Built once per origin request, the body moves once; a second build left it unusable, and a POST answered 500. A WeakMap lets an entry go with its request.
+const visitorRequests = new WeakMap<Request, Request>();
+
 /**
  * Rebuilds the request the visitor made. The script sees the storage origin and
  * the deploy folder instead, which breaks routing, `Astro.url`, absolute
  * redirects, and the origin check on form posts.
  */
 export function toVisitorRequest(originRequest: Request): Request {
+  let visitorRequest = visitorRequests.get(originRequest);
+  if (!visitorRequest) {
+    visitorRequest = buildVisitorRequest(originRequest);
+    visitorRequests.set(originRequest, visitorRequest);
+  }
+  return visitorRequest;
+}
+
+function buildVisitorRequest(originRequest: Request): Request {
   const { request } = removeDeployFolder(originRequest);
   const url = new URL(request.url);
 
@@ -33,7 +45,7 @@ export function toVisitorRequest(originRequest: Request): Request {
   url.port = "";
 
   const visitorRequest = new Request(url, request);
-  // A page that reads or echoes the request headers would leak the secret. It is deleted in place: building another Request from this one took the body from the origin request, which this function reads more than once, and every POST answered 500.
+  // A page that reads or echoes the request headers would leak the secret. It is deleted in place, because building another Request from this one would move the body again.
   visitorRequest.headers.delete(FORWARD_SECRET_HEADER);
   return visitorRequest;
 }
