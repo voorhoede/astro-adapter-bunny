@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { CreatePreviewServer } from "astro";
 
-const RUNNER = fileURLToPath(new URL("run-script.ts", import.meta.url));
+const RUNNER = fileURLToPath(new URL("run-script.js", import.meta.url));
 
 /**
  * `astro preview`: runs the built script under Deno, since the bundle holds the

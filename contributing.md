@@ -10,6 +10,16 @@ npm run check
 
 `npm run check` runs the type check and the tests.
 
+## Building
+
+The package ships JavaScript from `dist/`, which git ignores: its `exports` point there, also for `test/adapter-test`, which links to the package. `npm ci` builds it, as does `npm pack`. After changing anything in `src/`, run:
+
+```sh
+npm run build
+```
+
+`rolldown.config.ts` builds one file per export, with every bare import left to the installing project except `@std/*` and `@jsr/*`, which are bundled. `tsconfig.build.json` writes the type declarations for the main export into `dist/types/`.
+
 Add an entry under `[Unreleased]` in [`changelog.md`](changelog.md) for every change a user of the package would notice.
 
 Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or update an ADR when a change decides something a later reader would ask about. Each ADR stands on its own: it states the measurements it needs, with how and when they were taken, and links to no other file.
@@ -24,6 +34,7 @@ Build-time code runs in Node while Astro builds; runtime code is bundled into th
 
 | Module | What it does |
 | --- | --- |
+| `rolldown.config.ts` | Builds the exports into `dist/`. |
 | `src/index.ts` | The Astro integration: config overrides, the build output, and bundling the server into `dist/index.js` when Astro built one. |
 | `src/lib/build/lib/adapter.ts` | What the adapter declares to Astro, and the server build config that resolves Deno first. |
 | `src/lib/build/lib/image-service.ts` | Turns the `imageService` option into Astro's build and runtime image services. |
@@ -41,7 +52,7 @@ Build-time code runs in Node while Astro builds; runtime code is bundled into th
 | `src/lib/runtime/lib/needs-trailing-slash-redirect.ts` | Tells whether a path needs Astro's trailing slash redirect before it goes to storage. |
 | `src/lib/runtime/lib/cache-control.ts` | The `Cache-Control` for rendered responses and stored files. |
 | `src/lib/runtime/lib/content-type.ts` | The content type for extensions storage answers as `application/octet-stream`. |
-| `src/lib/preview/preview.ts` | `astro preview`: starts `run-script.ts` with Deno and stops it with the preview. |
+| `src/lib/preview/preview.ts` | `astro preview`: starts the built `run-script.js` with Deno and stops it with the preview. |
 | `src/lib/preview/run-script.ts` | Runs the built script under Deno on Astro's host and port, with the headers bunny.net sets and `dist/client` as storage. |
 
 ## Tests
@@ -64,7 +75,7 @@ test/live/run.sh regress formats           # some suites
 | `manifest` | `.bunny/build.json` and `dist/_redirects`, without a deploy |
 | `base` | `base: '/docs'`, from the root and from a deploy folder |
 
-Builds and downloads land in `test/live/.work`, which git ignores. A run leaves the zone on the test app, from the root, without edge rules.
+`test/live/run.sh` builds the package first. Builds and downloads land in `test/live/.work`, which git ignores. A run leaves the zone on the test app, from the root, without edge rules.
 
 Write the check first and agree on the expected result before the code. A bug fix gets a check that fails before the fix.
 
