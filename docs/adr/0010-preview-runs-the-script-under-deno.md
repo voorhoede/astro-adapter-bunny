@@ -47,7 +47,7 @@ Only server output gets a preview entrypoint; without a script Astro serves the 
 - Bad: `astro preview` needs Deno.
 - Good: byte ranges answer 206, as on bunny.net.
 - Bad: the stand-in gives every extension its type, where storage answers some as `application/octet-stream` and the script types them on the way out. Text types carry `; charset=UTF-8`.
-- Bad: `@std/http` comes from JSR through `npm:@jsr/std__http`, which npmjs.org does not host: a project that installs the adapter needs `@jsr:registry=https://npm.jsr.io` in its `.npmrc`.
+- Good: `@std/http` comes from JSR through `npm:@jsr/std__http`, which npmjs.org does not host, but the package build bundles it into `run-script.js`, so a project that installs the adapter needs no other registry.
 - Bad: a static site with a `server:defer` island gets Astro's static preview, without its script.
 - Bad: `server.headers` and `server.allowedHosts` are ignored.
 

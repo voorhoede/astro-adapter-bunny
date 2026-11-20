@@ -8,3 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `astro preview` runs the built script under Deno, with `dist/client` standing in for the storage zone. It needs Deno installed.
+
+### Changed
+- The package ships JavaScript built into `dist/`, with type declarations, instead of its TypeScript sources. Installing it needs no registry besides npmjs.org.

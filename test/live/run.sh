@@ -86,6 +86,9 @@ suite_csp() {
   rules_down
 }
 
+# The test app uses the package's built exports in dist/.
+(cd $ROOT && npm run build >/dev/null) || exit 1
+
 suites=($@)
 (( $#suites )) || suites=(regress folder formats trailing errors manifest base csp)
 for s in $suites; do echo "== $s"; suite_$s; done
