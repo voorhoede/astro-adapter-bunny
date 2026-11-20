@@ -28,6 +28,8 @@ const createPreviewServer: CreatePreviewServer = ({
     "deno",
     [
       "run",
+      // Deno would otherwise write a deno.lock into the project.
+      "--no-lock",
       "--allow-net",
       "--allow-read",
       "--allow-env",

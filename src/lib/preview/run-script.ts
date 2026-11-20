@@ -9,7 +9,7 @@
  * storage zone as its origin.
  */
 import { net } from "@bunny.net/edgescript-sdk";
-import { extname, join, normalize } from "node:path";
+import { serveDir } from "@std/http/file-server";
 import { pathToFileURL } from "node:url";
 
 type Middlewares = Parameters<typeof net.http.internal_buildPullZoneHandler>[1];
@@ -18,8 +18,6 @@ declare const Deno: {
   args: string[];
   stdin: { readable: ReadableStream<Uint8Array> };
   exit(code?: number): never;
-  readFile(path: string): Promise<Uint8Array<ArrayBuffer>>;
-  stat(path: string): Promise<{ isFile: boolean; isDirectory: boolean }>;
   serve(
     options: {
       port: number;
@@ -38,62 +36,34 @@ if (!script || !clientDir || !hostname || !port) {
   throw new Error("Usage: run-script.ts <script> <client dir> <hostname> <port>");
 }
 
-// Storage sets these itself. The script gives other extensions their type.
-const CONTENT_TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".css": "text/css",
-  ".js": "application/javascript",
-  ".json": "application/json",
-  ".xml": "application/xml",
-  ".txt": "text/plain",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-};
-
-async function readStored(
-  path: string,
-): Promise<{ body: Uint8Array<ArrayBuffer>; type: string } | undefined> {
-  const file = normalize(join(clientDir!, decodeURIComponent(path)));
-  if (!file.startsWith(clientDir!)) return undefined;
-
-  try {
-    const info = await Deno.stat(file);
-    if (info.isDirectory) return await readStored(join(path, "index.html"));
-    if (!info.isFile) return undefined;
-    const type = CONTENT_TYPES[extname(file)] ?? "application/octet-stream";
-    return { body: await Deno.readFile(file), type };
-  } catch {
-    return undefined;
-  }
-}
+const fromDir = (request: Request) =>
+  serveDir(request, { fsRoot: clientDir, quiet: true });
 
 /**
  * Answers like the pull zone in front of the storage zone: a folder answers
- * its `index.html`, and a missing file the prerendered 404 page with 404, as
- * the storage zone's `Custom404FilePath` does.
+ * its `index.html` with or without its trailing slash, and a missing file the
+ * prerendered 404 page with 404, as the storage zone's `Custom404FilePath`
+ * does.
  */
 async function fromStorage(request: Request): Promise<Response> {
-  if (!["GET", "HEAD"].includes(request.method)) {
-    return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
+  let response = await fromDir(request);
+
+  if (response.status === 301) {
+    const location = response.headers.get("location")!;
+    response = await fromDir(new Request(location, request));
   }
 
-  const { pathname } = new URL(request.url);
-  const stored = await readStored(pathname);
-  const notFound = stored ? undefined : await readStored("/404.html");
-  const file = stored ?? notFound;
+  if (response.status === 404) {
+    const page = await fromDir(
+      new Request(new URL("/404.html", request.url), { method: request.method }),
+    );
+    response = new Response(page.ok ? page.body : null, {
+      status: 404,
+      headers: page.ok ? page.headers : {},
+    });
+  }
 
-  return new Response(request.method === "HEAD" ? null : (file?.body ?? null), {
-    status: stored ? 200 : 404,
-    headers: file ? { "content-type": file.type } : {},
-  });
+  return response;
 }
 
 const storageOrigin = await new Promise<string>((resolve) => {
