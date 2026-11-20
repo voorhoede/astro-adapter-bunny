@@ -8,7 +8,7 @@ npm ci
 npm run check
 ```
 
-`npm run check` runs formatting, lint, the type check and the tests. The pre-commit hook in `.husky/` runs the same before every commit.
+`npm run check` runs the type check and the tests.
 
 Add an entry under `[Unreleased]` in [`changelog.md`](changelog.md) for every change a user of the package would notice.
 
@@ -16,28 +16,55 @@ Decisions and the facts they rest on are in [`docs/adr/`](docs/adr/). Add or upd
 
 ## General Prerequisites
 - Node.js, the version in [`.node-version`](.node-version).
-- [Deno](https://deno.com/), for the tests that run a built script the way bunny.net does. CI uses 2.7.12, the version bunny.net reports.
+- The [bunny CLI](https://bunny.net/docs/cli), logged in, for the live checks.
 
 ## How the code is organized
 
+Build-time code runs in Node while Astro builds; runtime code is bundled into the Edge Script.
+
 | Module | What it does |
 | --- | --- |
-| `src/routing` | What a request becomes: render, redirect, or a stored file with what to do when storage has none. Pure, no Astro or bunny.net imports. |
-| `src/caching` | `finalize`, which gives every response its `Cache-Control` and applies `_headers` to stored files, and the bunny.net CDN cache provider. |
-| `src/runtime` | The request handlers both script types share, `platform` (the only module that reads bunny.net globals) and `storage` (Storage API reads). |
-| `src/scripts` | The two server entries, `middleware` and `standalone`, which register with bunny.net through `@bunny.net/edgescript-sdk`. |
-| `src/build` | The Astro integration: config overrides, the `_headers` and `_redirects` parsers, `bundle` (one Rolldown pass to `dist/index.js`), the size check and `.bunny/build.json`. |
-| `src/preview` | `astro preview`: the built script behind a local stand-in for the pull zone. |
-
-A request is decided by `routing.decide` as data, and each script type only interprets that decision with its own I/O, so routing rules are tested as tables without a runtime.
+| `src/index.ts` | The Astro integration: config overrides, the build output, and bundling the server into `dist/index.js` when Astro built one. |
+| `src/lib/build/lib/adapter.ts` | What the adapter declares to Astro, and the server build config that resolves Deno first. |
+| `src/lib/build/lib/image-service.ts` | Turns the `imageService` option into Astro's build and runtime image services. |
+| `src/lib/build/lib/bundle-server.ts` | The Rolldown pass that turns Astro's server entry into one file, with Node builtins as `node:` imports. |
+| `src/lib/build/lib/check-script.ts` | Fails the build on a script over 10 MB or with a builtin bunny.net cannot run, and warns above 7 MB. |
+| `src/lib/build/lib/print-redirects.ts` | Writes Astro's `redirects` in the `_redirects` format. |
+| `src/lib/build/lib/print-headers.ts` | Writes each prerendered page's Content-Security-Policy in the `_headers` format. |
+| `src/lib/build/lib/write-static-files.ts` | Appends the redirects and headers to `_redirects` and `_headers` in the client build, after a site's own lines. |
+| `src/lib/build/lib/write-script.ts` | Bundles, checks and writes `dist/index.js`. |
+| `src/lib/build/lib/write-build-manifest.ts` | Writes `.bunny/build.json`, the build manifest in bunny.net's shape. |
+| `src/lib/runtime/script.ts` | The Edge Script: asks storage first for GET and HEAD and renders on a 404, renders other methods directly, and answers 405 for those on stored paths. |
+| `src/lib/runtime/lib/render-app.ts` | Renders a request with Astro, with the visitor's request and address, and sets `private, no-store` when the response has no `Cache-Control`. |
+| `src/lib/runtime/lib/bunny-helpers.ts` | Translates between bunny.net and Astro: the visitor's request, the storage request and response, the client address, and whether a path is stored. |
+| `src/lib/runtime/lib/deploy-folder.ts` | Strips the deploy folder an edge rule puts in front of the path, and adds it back for storage, or adds the folder bunny.net's CLI names. |
+| `src/lib/runtime/lib/needs-trailing-slash-redirect.ts` | Tells whether a path needs Astro's trailing slash redirect before it goes to storage. |
+| `src/lib/runtime/lib/cache-control.ts` | The `Cache-Control` for rendered responses and stored files. |
+| `src/lib/runtime/lib/content-type.ts` | The content type for extensions storage answers as `application/octet-stream`. |
 
 ## Tests
 
-- **Unit tests** sit next to the code as `src/<module>/<name>.test.ts`, and run on Node with `node:test`.
-- **Build tests** build `test/app` and the fixtures in `test/fixtures/` with Astro, and check what lands in `dist` and `.bunny/build.json`.
-- **Runtime tests** run the built `dist/index.js` under Deno through `test/harness/`, with a stub for the `Bunny` global, a fake Storage API and the same pull zone stand-in `astro preview` uses.
+The adapter is checked on bunny.net itself, by `test/live/`. Each suite builds a variant of `test/adapter-test`, uploads it, publishes the script, and checks the responses with `curl`:
 
-Write the test first and agree on the expected result before the code. A bug fix gets a test that fails before the fix.
+```sh
+cp test/live/.env.example test/live/.env   # fill in the test zones and script
+test/live/run.sh                           # every suite
+test/live/run.sh regress formats           # some suites
+```
+
+| Suite | What it covers |
+| --- | --- |
+| `regress` | The test app from the zone root: rendering, files, cache headers, redirects, cookies, actions, i18n, `Astro.clientAddress` |
+| `folder` | The same app from a deploy folder behind the edge rules |
+| `formats` | `build.format` `'file'` and `'preserve'` |
+| `trailing` | `trailingSlash` `'always'` and `'never'` |
+| `errors` | A prerendered `404.astro` through `Custom404FilePath` |
+| `manifest` | `.bunny/build.json` and `dist/_redirects`, without a deploy |
+| `base` | `base: '/docs'`, from the root and from a deploy folder |
+
+Builds and downloads land in `test/live/.work`, which git ignores. A run leaves the zone on the test app, from the root, without edge rules.
+
+Write the check first and agree on the expected result before the code. A bug fix gets a check that fails before the fix.
 
 ## Checks on bunny.net
 

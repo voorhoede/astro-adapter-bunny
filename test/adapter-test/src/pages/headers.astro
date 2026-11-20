@@ -1,0 +1,7 @@
+---
+Astro.response.headers.set('x-custom', 'from-page');
+Astro.response.headers.set('cache-control', 'public, max-age=60');
+---
+
+<h1>Headers</h1>
+<p>Middleware says: {Astro.locals.fromMiddleware}</p>

@@ -2,32 +2,34 @@
   "name": "astro-adapter-bunny",
   "version": "0.0.0",
   "private": true,
-  "description": "Astro adapter for bunny.net Edge Scripting, as a standalone or middleware script.",
+  "description": "Astro adapter for bunny.net Edge Scripting.",
   "license": "ISC",
+  "author": "De Voorhoede",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voorhoede/astro-adapter-bunny.git"
   },
   "type": "module",
+  "imports": {
+    "#package.json": "./package.json"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./script.ts": "./src/lib/runtime/script.ts"
+  },
   "scripts": {
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint --no-error-on-unmatched-pattern",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
-    "prepare": "husky"
+    "check": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@astrojs/internal-helpers": "^0.13.2",
     "@bunny.net/edgescript-sdk": "^0.13.0",
     "rolldown": "^1.2.15"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "astro": "^7.4.2",
-    "husky": "^9.1.7",
-    "oxfmt": "^0.74.0",
-    "oxlint": "^1.89.0",
     "typescript": "^7.0.2"
   },
   "peerDependencies": {
