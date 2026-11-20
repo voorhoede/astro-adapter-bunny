@@ -17,6 +17,10 @@ export function adapter(
     name: "astro-adapter-bunny",
     entrypointResolution: "auto",
     serverEntrypoint: "astro-adapter-bunny/script.ts",
+    // Without a script Astro serves the files itself.
+    ...(buildOutput === "server" && {
+      previewEntrypoint: "astro-adapter-bunny/preview.ts",
+    }),
     adapterFeatures: {
       buildOutput,
       preserveBuildClientDir: true,

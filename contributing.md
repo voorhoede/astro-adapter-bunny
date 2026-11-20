@@ -41,6 +41,8 @@ Build-time code runs in Node while Astro builds; runtime code is bundled into th
 | `src/lib/runtime/lib/needs-trailing-slash-redirect.ts` | Tells whether a path needs Astro's trailing slash redirect before it goes to storage. |
 | `src/lib/runtime/lib/cache-control.ts` | The `Cache-Control` for rendered responses and stored files. |
 | `src/lib/runtime/lib/content-type.ts` | The content type for extensions storage answers as `application/octet-stream`. |
+| `src/lib/preview/preview.ts` | `astro preview`: starts `run-script.ts` with Deno and stops it with the preview. |
+| `src/lib/preview/run-script.ts` | Runs the built script under Deno on Astro's host and port, with the headers bunny.net sets and `dist/client` as storage. |
 
 ## Tests
 

@@ -39,10 +39,10 @@ function buildVisitorRequest(originRequest: Request): Request {
     ?.trim();
   if (protocol) url.protocol = protocol;
 
+  url.port = "";
+
   const host = getForwardedHost(request) ?? request.headers.get("host");
   if (host) url.host = host;
-
-  url.port = "";
 
   const visitorRequest = new Request(url, request);
   // A page that reads or echoes the request headers would leak the secret. It is deleted in place, because building another Request from this one would move the body again.
