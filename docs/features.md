@@ -54,7 +54,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | Storage zone shielded from visitors | ✅ | With deploy folders: an edge rule blocks `/deploys/*` with 403. A deploy to the root stays readable. | n/a | n/a | deploy folder, reserved paths | deploy folder |
 | Cache-Control defaults | ✅ | Rendered `private, no-store`, files `max-age=0, must-revalidate`. | all | yes | yes | yes |
 | `astro dev` | ✅ | | all | yes | yes | yes |
-| `astro preview` | ❌ | No preview entrypoint. | Node, Cloudflare | yes | yes | yes |
+| `astro preview` | ✅ | Runs `dist/index.js` under Deno, so it needs Deno installed. Storage is stood in for by `dist/client`. Checked locally: stored files, on-demand routes, redirects, the 404 and 500 pages, form posts and `Astro.clientAddress`. A static site with a `server:defer` island gets Astro's static preview, without its script. | Node, Cloudflare | yes | yes | yes |
 | Script size check | ✅ | The build warns above 7 MB and fails above 10 MB. ⛔ see platform limits. | n/a | warn 7.5, fail 10 MB | warn 7, fail 10 MB | warn 7.5, fail 10 MB |
 | Refusing Node builtins that break the script | ✅ | The build fails on `node:child_process`, `node:vm`, `node:worker_threads`, `node:constants` and `node:path/win32`, and turns bare builtin names into `node:` names. ⛔ see platform limits. | n/a | aliases bare names | fails the build | aliases bare names |
 
@@ -128,7 +128,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 | --- | --- | --- | --- | --- |
 | `entrypointResolution` | `auto` | ✅ | | all `auto` |
 | `serverEntrypoint` | `astro-adapter-bunny/script.ts` | ✅ | | all |
-| `previewEntrypoint` | not set | ❌ | `astro preview` does not work. | Node, Cloudflare |
+| `previewEntrypoint` | `astro-adapter-bunny/preview.ts`, for server output | ✅ | Starts Deno with the built script. | Node, Cloudflare |
 | `client.internalFetchHeaders`, `client.assetQueryParams` | with `BUNNY_DEPLOY_ID` | ✅ | `x-deployment-id` and `?dpl=<id>`, for skew protection. Assets, server islands and actions of a kept release answered from its own pull zone. Needs a deploy tool that keeps a pull zone per release. | Vercel opt-in, Netlify automatic |
 | Custom prerenderer (`setPrerenderer()`) | not set | ➖ | Prerendering runs in Node, which works. | Cloudflare (workerd) |
 | `args`, `exports` | not set | ➖ | Deprecated. | |

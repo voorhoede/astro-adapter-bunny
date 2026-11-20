@@ -31,6 +31,10 @@ export default defineConfig({
 adapter: bunny({ imageService: 'passthrough' }),
 ```
 
+## Preview
+
+`astro preview` runs the built script under [Deno](https://deno.com/), the runtime bunny.net runs it on, so it needs Deno installed. Files come from `dist/client`, the way the storage zone serves them.
+
 ## License
 
 [ISC License](license.md)
