@@ -66,7 +66,6 @@ export async function writeBuildManifest(
         redirects: fromRoot(join(clientDir, "_redirects")),
       }),
       ...(hasHeaders && { headers: fromRoot(join(clientDir, "_headers")) }),
-      deployFolderHeader: "X-Bunny-Deploy",
     },
   };
 

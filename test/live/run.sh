@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Live checks against throwaway bunny.net resources (see test/live/.env.example).
-# usage: test/live/run.sh [regress|folder|formats|trailing|errors|manifest|base|csp]...  (no argument runs all)
+# usage: test/live/run.sh [regress|formats|trailing|errors|manifest|base|csp]...  (no argument runs all)
 source ${0:A:h}/lib.sh
 
 prerender_index() { sed -i '' "1s/^---$/---\nexport const prerender = true;/" $1/src/pages/index.astro; }
@@ -15,16 +15,6 @@ static_app() {
 }
 
 suite_regress() { deploy $ROOT/test/adapter-test && zsh $LIVE/regress.sh; }
-
-suite_folder() {
-  deploy $ROOT/test/adapter-test live1
-  echo "from deploy live1" > $WORK/marker.txt
-  timeout 60 bunny storage files upload $WORK/marker.txt -z $BUNNY_TEST_STORAGE_ZONE --to deploys/live1/marker.txt >/dev/null 2>&1
-  rules live1; settle
-  zsh $LIVE/deploy-folder-checks.sh live1
-  zsh $LIVE/regress.sh
-  rules_down
-}
 
 suite_formats() {
   for f in file preserve; do
@@ -44,11 +34,6 @@ suite_errors() {
   local dir=$(variant errors "" errors)
   storage_404 /404.html
   deploy $dir && zsh $LIVE/error-pages.sh root
-  storage_404 /deploys/live3/404.html
-  deploy $dir live3
-  rules live3; settle
-  zsh $LIVE/error-pages.sh folder
-  rules_down
   dir=$(variant errors-base "base: '/docs'," errors)
   storage_404 /docs/404.html
   BASE_PATH=/docs deploy $dir && P=/docs zsh $LIVE/error-pages.sh base
@@ -72,10 +57,6 @@ suite_base() {
   BASE_PATH=/docs deploy $dir && zsh $LIVE/base.sh base
   grep -qE '^/docs/old +/about +301$' $dir/dist/client/_redirects && echo "[base redirects file] ok" || echo "FAIL base redirects file"
   python3 -I -c "import json,sys;m=json.load(open('$dir/.bunny/build.json'));print('[base manifest] ok' if m['astroAdapterBunny'].get('base')=='/docs' else 'FAIL base manifest')"
-  BASE_PATH=/docs deploy $dir live2
-  rules live2; settle
-  zsh $LIVE/base.sh base
-  rules_down
 }
 
 suite_csp() {
@@ -90,7 +71,7 @@ suite_csp() {
 (cd $ROOT && npm run build >/dev/null) || exit 1
 
 suites=($@)
-(( $#suites )) || suites=(regress folder formats trailing errors manifest base csp)
+(( $#suites )) || suites=(regress formats trailing errors manifest base csp)
 for s in $suites; do echo "== $s"; suite_$s; done
 
 # Leave the zone on the test app, from the root, without rules.

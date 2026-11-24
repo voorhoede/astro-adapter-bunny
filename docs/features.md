@@ -45,14 +45,14 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `<Image>` on on-demand pages (`/_image`) | 🟡 | Serves the original with `content-type: image/undefined`. | all, Sharp or image CDN | original (no-op) | original | original |
 | Content collections | ✅ | Prerendered list and on-demand entries. | ➖ | untested | untested | untested |
 | `import.meta.env` at runtime | ✅ | Inlined at build, as Astro does. `process.env` reads script variables at runtime. | all | yes | yes | yes |
-| Range requests | ✅ | The pull zone answers 206 with the right bytes, also on a cache miss. `.svg` answered 200 with the whole file. | Node yes | yes | no | yes |
-| Conditional requests (`If-None-Match`) | 🟡 | A cached file answers 304 from the CDN itself. A file with `max-age=0`, which the CDN does not keep, answers 200 with the body. A 304 from the script worked only with the pull zone's "before cache" execution, which runs the script on every request, cache hits included, so the adapter does not do it (measured on 2026-11-18). | Node yes | yes | no | yes |
+| Range requests | ✅ | The pull zone answers 206 with the right bytes, also on a cache miss. `.svg` answered 200 with the whole file. With cache slicing off, a 5 MB file with `s-maxage` answered 206 on a miss and on hits; a stored file the CDN does not keep answered 200 with the whole file (measured on 2026-11-24). | Node yes | yes | no | yes |
+| Conditional requests (`If-None-Match`) | ✅ | Stored files and prerendered pages answer 304 from the CDN once it holds them, also on `/about/`, with cache slicing off and `s-maxage` on stored files (measured on 2026-11-24). The CDN never passes `If-None-Match` to the script, so a rendered page answers 200. | Node yes | yes | no | yes |
 | Path traversal (`/..%2f..%2f`) | ✅ | bunny.net answers 400 before the script. | all | yes | yes | yes |
 | Request bodies | ✅ | A 100 MB POST reached an endpoint and came back. Astro limits actions and server islands to 1 MB itself. | Node limits to 1 GiB | untested | untested | untested |
 | Compression | ✅ | gzip on HTML and JSON, from the pull zone. No brotli. | platform | | | |
 | Content type for unknown extensions | ✅ | Storage answered `application/octet-stream` for `.webmanifest`, `.mjs`, `.csv`, `.yaml` and ten more; the script sets their type on the way to the cache. | n/a | from extension | from extension | from extension |
-| Storage zone shielded from visitors | ✅ | With deploy folders: an edge rule blocks `/deploys/*` with 403. A deploy to the root stays readable. | n/a | n/a | deploy folder, reserved paths | deploy folder |
-| Cache-Control defaults | ✅ | Rendered `private, no-store`, files `max-age=0, must-revalidate`. | all | yes | yes | yes |
+| Storage zone shielded from visitors | ➖ | Each release has its own storage zone, which holds only that release's files, so no other release can be requested through it. | n/a | n/a | deploy folder, reserved paths | deploy folder |
+| Cache-Control defaults | ✅ | Rendered `private, no-store`, files `max-age=0, must-revalidate, s-maxage=86400`. | all | yes | yes | yes |
 | `astro dev` | ✅ | | all | yes | yes | yes |
 | `astro preview` | ✅ | Runs `dist/index.js` under Deno, so it needs Deno installed. Storage is stood in for by `dist/client`. Checked locally: stored files, on-demand routes, redirects, the 404 and 500 pages, form posts and `Astro.clientAddress`. A static site with a `server:defer` island gets Astro's static preview, without its script. | Node, Cloudflare | yes | yes | yes |
 | Script size check | ✅ | The build warns above 7 MB and fails above 10 MB. ⛔ see platform limits. | n/a | warn 7.5, fail 10 MB | warn 7, fail 10 MB | warn 7.5, fail 10 MB |
@@ -88,10 +88,10 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `logger` config and script logs | 🟡 | Untested: bunny.net shows script logs in its dashboard only, not through the API. | Node, Vercel | | | |
 | Custom `outDir` | ✅ | The script lands in `<outDir>/index.js`, the files in `<outDir>/client`. `build.client` and `build.server` untested. | all | | | |
 | `experimental.redirectPage` (`src/pages/3xx.astro`) | 🟡 | Works when `3xx.astro` sets `prerender = true`. With `output: 'server'` and without it, the build falls back to Astro's own page. | | | | |
-| `security.allowedDomains` | ➖ | The script takes the host from `Host`, or from `X-Forwarded-Host` only next to its `BUNNY_FORWARD_SECRET`. A request with `X-Forwarded-Host: evil.example` kept the real host in `Astro.url`. | all | | | |
+| `security.allowedDomains` | ➖ | The script takes the host from `Host` and ignores `X-Forwarded-Host`. | all | | | |
 | Image service at runtime (Bunny Optimizer) | ⛔ | Optimizer answered 523 on script-backed pull zones. | Vercel, Netlify, Cloudflare | option, warns | no | option, unusable |
 | Storage regions and replicas | ✅ | The pull zone reads from the storage zone and its replicas. | n/a | `storageHost` | `BUNNY_STORAGE_HOST` | replicas |
-| Deploy folders and rollback | ✅ | Edge rules serve `deploys/<id>` and name it in `X-Bunny-Deploy`; the script strips the folder. Optional. | n/a | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` |
+| Rollback | 🟡 | Up to the deploy tool: it switches a pull zone to an earlier release's storage zone and script, then purges. Measured on bunny.net, not built yet. | n/a | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` |
 | Build manifest for deploy tooling | ✅ | `.bunny/build.json` in bunny.net's shape, `type: "middleware"`, our fields under `astroAdapterBunny`. Untested with bunny.net's CLI. | n/a | `.bunny/build.json` | `.bunny/build.json` | `.bunny/build.json` |
 | `waitUntil` and platform context in `locals` | 🟡 | The script hands `Bunny.v1.waitUntil` to Astro, which passes it to a cache provider; it exists at runtime. No platform context in `locals`: code can call the `Bunny` global itself. | Cloudflare, Netlify | `locals.runtime` | no | `locals.runtime` |
 | Fonts API | ✅ | A local font served from `/_astro/fonts/` as `font/woff2`. | ➖ | | | used |
@@ -129,7 +129,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 | `entrypointResolution` | `auto` | ✅ | | all `auto` |
 | `serverEntrypoint` | `astro-adapter-bunny/script.ts` | ✅ | | all |
 | `previewEntrypoint` | `astro-adapter-bunny/preview.ts`, for server output | ✅ | Starts Deno with the built script. | Node, Cloudflare |
-| `client.internalFetchHeaders`, `client.assetQueryParams` | with `BUNNY_DEPLOY_ID` | ✅ | `x-deployment-id` and `?dpl=<id>`, for skew protection. Assets, server islands and actions of a kept release answered from its own pull zone. Needs a deploy tool that keeps a pull zone per release. | Vercel opt-in, Netlify automatic |
+| `client.internalFetchHeaders`, `client.assetQueryParams` | | ❌ | No skew protection: after a deploy, an open page's late assets answer 404 and its server islands and actions run the new release until it reloads. | Vercel opt-in, Netlify automatic |
 | Custom prerenderer (`setPrerenderer()`) | not set | ➖ | Prerendering runs in Node, which works. | Cloudflare (workerd) |
 | `args`, `exports` | not set | ➖ | Deprecated. | |
 

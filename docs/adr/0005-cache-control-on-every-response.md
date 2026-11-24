@@ -1,6 +1,6 @@
 ---
 status: accepted; open (a cache provider for routeRules, Vary)
-date: 2026-10-28, rewritten 2026-11-10
+date: 2026-10-28, rewritten 2026-11-10 and 2026-11-24
 ---
 
 # Cache-Control on every response
@@ -16,6 +16,8 @@ Astro sets no `Cache-Control` on a rendered response unless the page does, and s
 - **A 500, a 404 or a redirect** answered by the pull zone came with `no-cache` from bunny.net, with `CacheErrorResponses` off.
 - **`Vary` is ignored.** A response with `public, max-age=60` and `Vary: cookie` was cached for one visitor's cookie and served to a visitor with another, and the `Vary` header was stripped (2026-11-10).
 - **`routeRules`** set no header without a cache provider, and with Astro's `memoryCache()` only an in-memory cache in the script (Astro 7.4.5, 2026-11-10).
+- **Conditional requests** reach only the edge cache. The edge never passed `If-None-Match` on to the origin, so the script never saw it, while storage asked directly answered 304. A stored page with `public, max-age=0, must-revalidate` answered 200 from storage on every request, with or without a matching `If-None-Match`. With `s-maxage=3600` added, the second request was a hit and every request with the `ETag` after it answered 304, while the visitor still got `max-age=0`. `CDN-Cache-Control: max-age=3600` was ignored. A fixed cache expiration on the pull zone also gave 304, but cached a `private, no-store` response and sent the visitor `max-age=3600` (2026-11-24).
+- **Cache slicing**, a pull zone setting on by default for a storage origin, left out the `ETag` on a path without an extension (`/about/`, `/about`), a `.txt` and a `.png`, so a page on such a path could not answer 304. With it off, every URL had an `ETag`, weak (`W/`) even when the visitor asked for no compression (2026-11-24).
 - On a script with a one-day `s-maxage`, a full zone purge and a URL purge each took effect within 30 s, while a tag purge (`CacheTag` against the response's `CDN-Tag`) had not after 5 minutes (2026-11-03).
 
 ## Considered options
@@ -31,11 +33,12 @@ The third.
 | Response | `Cache-Control` |
 | --- | --- |
 | Stored file under `build.assets` | `public, max-age=31536000, immutable` |
-| Any other stored file, prerendered pages included | `public, max-age=0, must-revalidate` |
+| Any other stored file, prerendered pages included | `public, max-age=0, must-revalidate, s-maxage=86400` |
 | Rendered by Astro, without its own `Cache-Control` | `private, no-store` |
 | Rendered by Astro, with its own `Cache-Control` | kept as it is |
 
-- **The pull zone must have** Smart Cache off, cache expiration set to respect the origin, query strings not ignored, and cookies not disabled.
+- **The pull zone must have** Smart Cache off, cache expiration set to respect the origin, query strings not ignored, cookies not disabled, and cache slicing off.
+- **A stored file stays at the edge for a day,** so the edge answers it, and answers 304 to a browser that has it. A release's files never change, and switching a pull zone to another release purges it, so the edge never serves a file of a release it no longer points at.
 - **No rule for cookies or errors.** bunny.net does not cache a response that sets a cookie, and does not cache error responses unless the zone is told to. A site that turns `CacheErrorResponses` on chooses to cache errors.
 - **No cache provider.** `routeRules` and `Astro.cache` do nothing at the CDN; a page sets its own `Cache-Control` instead.
 - **A static site without a script** gets the same headers from two pull zone edge rules: URL `*/_astro/*` sets `Cache-Control: public, max-age=31536000, immutable`, and any other URL sets `public, max-age=0, must-revalidate`. Its storage zone sets `Custom404FilePath` to `/404.html`. Without them, storage answered every file with `max-age=25600000` and bunny.net's own 404 page (2026-11-13). Path rules are enough there, since every response is a stored file. bunny.net's `bunny sites` caches a static site at the edge for 30 days with a purge per release instead; that setup is untested here.
@@ -43,12 +46,13 @@ The third.
 ### Consequences
 
 - Good: no rendered page is cached unless it asks to be, and a page's own header works.
-- Good: hashed assets are cached for a year, and a deploy shows other files at once.
-- Bad: every stored file other than hashed assets revalidates at storage on every request.
+- Good: hashed assets are cached for a year, other stored files and prerendered pages answer from the edge and with 304, and a deploy shows them at once through its purge.
+- Bad: a stored file is correct only because every switch purges; a deploy that changes files without a purge serves the old ones for a day.
+- Bad: a shared cache between visitor and bunny.net may keep a prerendered page for a day after a deploy.
 - Bad: a page that sets a `public` header and varies by cookie is served to the wrong visitor, since the zone ignores `Vary`.
-- Bad: correctness depends on four pull zone settings the adapter cannot set, and for a static site on two edge rules and a storage zone setting as well.
+- Bad: correctness depends on five pull zone settings the adapter cannot set, and for a static site on two edge rules and a storage zone setting as well.
 - Open: a cache provider, and invalidating by tag.
 
 ### Confirmation
 
-On bunny.net with the four settings: a rendered page without a header answers `private, no-store` and is never cached, a page with `public, max-age=60` keeps it and is cached on the second request, `/_astro/*` answers a year immutable, and other stored files `max-age=0, must-revalidate`.
+On bunny.net with the five settings: a rendered page without a header answers `private, no-store` and is never cached, a page with `public, max-age=60` keeps it and is cached on the second request, `/_astro/*` answers a year immutable, and other stored files `max-age=0, must-revalidate, s-maxage=86400`, a hit from the second request on, and 304 to a request with their `ETag`, also on `/about/`.
