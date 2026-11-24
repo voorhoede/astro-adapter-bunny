@@ -86,6 +86,7 @@ Required for every site with a script:
 | Cache expiration | respect the origin (`CacheControlMaxAgeOverride: -1`) | Otherwise a fixed time overrides every header the script sets, and a rendered page that sets cookies or differs per visitor is served to everyone. A zone created through the API had 30 days. |
 | Query strings | not ignored | Otherwise every query gets the first cached response. |
 | Disable cookies | off | It strips every `Set-Cookie`. |
+| Cache slicing ("Optimize for video") | off (`EnableCacheSlice: false`) | On by default for a storage origin. With it on, a page on a path without an extension (`/about/`, `/about`), a `.txt` and a `.png` got no `ETag`, so they could never answer 304. With it off, every URL had one (2026-11-24). |
 
 Leave "cache error responses" off, unless the site wants errors cached.
 

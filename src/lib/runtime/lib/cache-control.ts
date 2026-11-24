@@ -1,7 +1,8 @@
 // Without these, bunny.net caches a script response for 30 days and a stored file for ~296.
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
-const REVALIDATE = "public, max-age=0, must-revalidate";
+// The edge never passes If-None-Match on to the origin, so a stored file answers 304 only from the edge cache, and s-maxage lets the edge keep it. Safe only because a release's files never change and every switch to another release purges the pull zone; without that purge, the edge serves the old release's pages for a day.
+const REVALIDATE = "public, max-age=0, must-revalidate, s-maxage=86400";
 const NO_STORE = "private, no-store";
 
 // A route that sets its own header keeps it.

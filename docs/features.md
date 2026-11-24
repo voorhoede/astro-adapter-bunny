@@ -45,14 +45,14 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `<Image>` on on-demand pages (`/_image`) | 🟡 | Serves the original with `content-type: image/undefined`. | all, Sharp or image CDN | original (no-op) | original | original |
 | Content collections | ✅ | Prerendered list and on-demand entries. | ➖ | untested | untested | untested |
 | `import.meta.env` at runtime | ✅ | Inlined at build, as Astro does. `process.env` reads script variables at runtime. | all | yes | yes | yes |
-| Range requests | ✅ | The pull zone answers 206 with the right bytes, also on a cache miss. `.svg` answered 200 with the whole file. | Node yes | yes | no | yes |
-| Conditional requests (`If-None-Match`) | 🟡 | A cached file answers 304 from the CDN itself. A file with `max-age=0`, which the CDN does not keep, answers 200 with the body. A 304 from the script worked only with the pull zone's "before cache" execution, which runs the script on every request, cache hits included, so the adapter does not do it (measured on 2026-11-18). | Node yes | yes | no | yes |
+| Range requests | ✅ | The pull zone answers 206 with the right bytes, also on a cache miss. `.svg` answered 200 with the whole file. With cache slicing off, a 5 MB file with `s-maxage` answered 206 on a miss and on hits; a stored file the CDN does not keep answered 200 with the whole file (measured on 2026-11-24). | Node yes | yes | no | yes |
+| Conditional requests (`If-None-Match`) | ✅ | Stored files and prerendered pages answer 304 from the CDN once it holds them, also on `/about/`, with cache slicing off and `s-maxage` on stored files (measured on 2026-11-24). The CDN never passes `If-None-Match` to the script, so a rendered page answers 200. | Node yes | yes | no | yes |
 | Path traversal (`/..%2f..%2f`) | ✅ | bunny.net answers 400 before the script. | all | yes | yes | yes |
 | Request bodies | ✅ | A 100 MB POST reached an endpoint and came back. Astro limits actions and server islands to 1 MB itself. | Node limits to 1 GiB | untested | untested | untested |
 | Compression | ✅ | gzip on HTML and JSON, from the pull zone. No brotli. | platform | | | |
 | Content type for unknown extensions | ✅ | Storage answered `application/octet-stream` for `.webmanifest`, `.mjs`, `.csv`, `.yaml` and ten more; the script sets their type on the way to the cache. | n/a | from extension | from extension | from extension |
 | Storage zone shielded from visitors | ➖ | Each release has its own storage zone, which holds only that release's files, so no other release can be requested through it. | n/a | n/a | deploy folder, reserved paths | deploy folder |
-| Cache-Control defaults | ✅ | Rendered `private, no-store`, files `max-age=0, must-revalidate`. | all | yes | yes | yes |
+| Cache-Control defaults | ✅ | Rendered `private, no-store`, files `max-age=0, must-revalidate, s-maxage=86400`. | all | yes | yes | yes |
 | `astro dev` | ✅ | | all | yes | yes | yes |
 | `astro preview` | ✅ | Runs `dist/index.js` under Deno, so it needs Deno installed. Storage is stood in for by `dist/client`. Checked locally: stored files, on-demand routes, redirects, the 404 and 500 pages, form posts and `Astro.clientAddress`. A static site with a `server:defer` island gets Astro's static preview, without its script. | Node, Cloudflare | yes | yes | yes |
 | Script size check | ✅ | The build warns above 7 MB and fails above 10 MB. ⛔ see platform limits. | n/a | warn 7.5, fail 10 MB | warn 7, fail 10 MB | warn 7.5, fail 10 MB |
