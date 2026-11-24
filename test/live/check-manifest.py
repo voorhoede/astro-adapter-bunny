@@ -27,7 +27,7 @@ if mode == "ssr":
     c("env secret", {"name": "SECRET_MESSAGE", "reason": "astro:env secret", "secret": True, "optional": True} in env)
     c("env no public", not any(e["name"].startswith("PUBLIC_") for e in env))
     c("dev", m.get("dev") == {"command": "astro dev"})
-    c("extras", x == {"base": "/", "trailingSlash": "ignore", "buildFormat": "directory", "assetsDir": "_astro", "redirects": "dist/client/_redirects", "headers": "dist/client/_headers", "deployFolderHeader": "X-Bunny-Deploy"})
+    c("extras", x == {"base": "/", "trailingSlash": "ignore", "buildFormat": "directory", "assetsDir": "_astro", "redirects": "dist/client/_redirects", "headers": "dist/client/_headers"})
 elif mode.startswith("static"):
     out = "dist"
     c("kind", m.get("kind") == "static")

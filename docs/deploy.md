@@ -29,84 +29,52 @@ A custom `outDir` replaces `dist`.
 | `requires.pullZone` | Only for `ssr`: `disableCookies: false` and `enableSmartCache: false`. |
 | `requires.env` | Only for `ssr`: every `astro:env` secret, with `secret: true`, and `optional: true` when it is optional or has a default. |
 | `dev.command` | Only for `ssr`: `astro dev`. |
-| `astroAdapterBunny` | Our own fields, under one key: `trailingSlash`, `buildFormat`, `assetsDir`, `redirects` (the path of `dist/client/_redirects`, when it exists), `headers` (the path of `dist/client/_headers`, when it exists) and `deployFolderHeader` (`X-Bunny-Deploy`). |
+| `astroAdapterBunny` | Our own fields, under one key: `trailingSlash`, `buildFormat`, `assetsDir`, `redirects` (the path of `dist/client/_redirects`, when it exists), `headers` (the path of `dist/client/_headers`, when it exists). |
 
 Paths are relative to the project root and use forward slashes. bunny.net's contract says its CLI ignores fields it does not know; whether its CLI accepts this manifest is untested.
 
 ## Resources
 
-- **A storage zone** that holds `dist/client`.
-- **A pull zone** with that storage zone as its origin.
-- **A middleware Edge Script** attached to that pull zone, only for sites with `dist/index.js`. A script keeps the type it was created with, so it has to be created as a middleware script, not a standalone one.
+A release is one build of one commit, and is not changed once deployed:
+
+- **A storage zone** that holds the release's `dist/client` at its root, named after the site and the commit's short hash.
+- **A middleware Edge Script** with the release's `dist/index.js` and its variables and secrets, named like the zone, only for sites with `dist/index.js`. A script keeps the type it was created with, so it has to be created as a middleware script, not a standalone one.
+
+A pull zone points at one release, by its storage zone and its script:
+
+- **A pull zone per branch** that deploys, which serves as that branch's preview.
+- **A live pull zone** that holds the site's custom hostnames, added once by hand.
+
+Several pull zones can point at the same release. Measured on bunny.net on 2026-11-23: one middleware script served two pull zones at once, each from its own storage zone, and the script's `LinkedPullZones` listed both.
 
 ## Release steps
 
 1. **Build** with a fixed `ASTRO_KEY` in the environment. Astro encrypts server island props with a key made per build; without a fixed key, a page cached from one release breaks the islands of the next.
-2. **Upload `dist/client`** to `deploys/<id>/` in the storage zone, keeping paths, and under the site's `base` when it has one (see below). `<id>` names the release.
-3. **Publish `dist/index.js`** to the Edge Script, when it exists.
-4. **Point the pull zone at the release** with the deploy folder rules (see below).
-5. **Apply the redirects and headers** as edge rules (see below).
-6. **Purge the pull zone.** A full zone purge took effect within 30 seconds. A tag purge against a script response had not taken effect after 5 minutes.
+2. **Create the release's storage zone** with the site's region, tier and replication regions, and set its 404 page (see Static sites). A new zone can refuse uploads for a few seconds, so retry the first one.
+3. **Upload `dist/client`** to the root of the zone, keeping paths, and under the site's `base` when it has one (see below).
+4. **Create the release's script**, when `dist/index.js` exists: set its code, variables and secrets, and publish it.
+5. **Switch the branch's pull zone** to the release (see below), and check it.
+6. **Switch the live pull zone** to the same release, for the production branch, and check it again.
 
-Uploading before publishing means new hashed assets exist before a new script or page asks for them. A rollback publishes the earlier script, points the rewrite rule and the 404 page back at its folder, then purges; no file moves.
+A rollback switches a pull zone to an earlier release that still exists. No file is uploaded and no hostname moves.
 
-A deploy to the root of the storage zone, without the folder rules, also works. Then every stored file is publicly readable, and the tool has to remove files the build no longer has: the script asks storage first for every GET and HEAD, so a file left over from an earlier build wins over an on-demand route on the same path.
+A release's zone starts empty, so no file of an earlier build is left behind. That matters for a site with a script: the script asks storage first for every GET and HEAD, so a leftover file would win over an on-demand route on the same path.
 
-## Deploy folders
+Measured on bunny.net on 2026-11-20: a new storage zone on the Edge tier in DE accepted its first upload after 1.3 to 4.8 s, and 30 files (116 KB) took 10 to 15 s to upload, eight at a time. On 2026-11-23, after a storage zone was deleted, creating one with the same name was refused with `storagezone.name_taken` ("currently being deleted") for the 10 minutes tried. So redeploying a commit whose release was just deleted fails for a while.
 
-These rules and settings serve one release and hide the others, for sites with and without a script. They follow what bunny.net's CLI sets up for `bunny sites` (read from its source on 2026-11-15), plus the request header our script reads:
+## Switching a pull zone
 
-| Rule or setting | Trigger | Action |
-| --- | --- | --- |
-| Gate rule | URL `*/deploys/*` | Block request (`ActionType` 4). |
-| State rule | URL `*/_bunny/*` | Block request, when the tool keeps its own state in storage under `_bunny/`. |
-| Rewrite rule | URL matches none of `*/deploys/*` | Origin storage (`ActionType` 17): `ActionParameter1` the storage zone id, `ActionParameter2` its name, `ActionParameter3` `/deploys/<id>`. Extra action: set request header (`ActionType` 6) `X-Bunny-Deploy` to `<id>`. |
-| Storage zone 404 | | `Custom404FilePath` set to `/deploys/<id>/404.html` when the build has a `404.html`, else empty; `Rewrite404To200` off. A site with a script needs it too when `404.astro` is prerendered: the script passes this page on for a path no route answers. |
+Switching a pull zone to a release is one `POST /pullzone/{id}` that sets `OriginType: 2`, `StorageZoneId` and `MiddlewareScriptId` together, then a purge of that pull zone, then the redirect and header rules of the release (see below). The tool then checks the pull zone until it answers with the new release.
 
-The rewrite rule puts the folder in front of the path before the script runs, so the script sees `/deploys/<id>/about`. When `X-Bunny-Deploy` is set and the path starts with its folder, the script strips the folder for routing, `Astro.url` and the cache rule, and adds it back for storage. Without the header the script uses the path as it is, or the folder bunny.net's CLI names in `globalThis.__BUNNY_DEPLOY__.assetPrefix`, which it adds for storage itself.
+Measured on bunny.net on 2026-11-23, with every request reaching edge servers in DE:
 
-Measured on bunny.net on 2026-11-15, on a pull zone with the middleware script:
+- Without `OriginType: 2` in the body, the call answered 204 and kept the old storage zone, while the script changed.
+- Without a purge, the edge did not follow the change predictably. Once the script changed after 33 s while the storage zone was still the old one after 12 minutes. Once neither changed in 120 s. Requests had unique query strings, so no cached file was involved.
+- With all three fields in one call and a purge after it, seven switches never answered a script with another release's storage zone, polled from six threads every 100 ms (about 4,500 requests). The new pair answered 2 to 7 s after the call, and old and new pairs overlapped across edge servers for at most 0.5 s.
 
-- A file came from the release folder, not from the root, and `/deploys/<id>/...` answered 403.
-- The test app passed its 56 checks under the rules, and a `build.format: 'file'` build its 32.
-- `ActionParameter3` with a trailing slash, `/deploys/<id>/`, made the script see `/deploys/<id>//about`.
-- With the files in `deploys/<id>/`, no rules, and a `__BUNNY_DEPLOY__` line put at the top of the script, the test app passed its 56 checks.
+Untested: switching from other regions, and switching a pull zone without a script, as a static site has.
 
-Untested: these rules on a site without a script. The storage zone 404 page with the script was measured from the root, not from a deploy folder.
-
-## Skew protection
-
-Optional, for sites with a script. A page that is open keeps asking for late assets, server islands, actions and prefetches after a new release. Skew protection lets the release that served the page answer them.
-
-**Build.** Set `BUNNY_DEPLOY_ID` to the release id, the `<id>` of its deploy folder. Astro then adds `?dpl=<id>` to every asset URL and sends `x-deployment-id: <id>` with server island, action and prefetch requests. Without it, nothing is tagged and the script ignores both.
-
-**A pull zone per kept release.** Each release that stays reachable keeps its own pull zone on the same storage zone, with the deploy folder rules for its own `<id>`, the pull zone settings below, and its own middleware script running that release's `dist/index.js`. Give that script the secret `BUNNY_FORWARD_SECRET`, a random value per release.
-
-**On the pull zone with the site's hostname,** the one serving the newest release:
-
-| Rule or setting | Trigger | Action |
-| --- | --- | --- |
-| Kept release rule, one per kept release | Query string `*dpl=<id>*`, or request header `x-deployment-id` equal to `<id>` (match any) | Origin URL (`ActionType` 2) to the kept release's pull zone, `https://<its hostname>`. Extra action: set request header `x-bunny-forward-secret` to that release's secret. |
-| Rewrite rule | As in the deploy folders, plus for each kept id a query string and a request header trigger in "match none" mode (match all) | As in the deploy folders. |
-| `QueryStringVaryParameters` | | `dpl` |
-
-The newest release's script passes a request tagged with another id to the origin for every method, sets `x-forwarded-host` to the visitor's host, and leaves the response alone. A kept release's script takes the host from `x-forwarded-host` only when `x-bunny-forward-secret` equals its `BUNNY_FORWARD_SECRET`, and removes the secret header before Astro sees the request. So `Astro.url` names the site, and Astro's origin check passes for an action called from the old page.
-
-A full page load is not pinned, and neither is a plain HTML form post (`<form method="post">`, also for an action), which carries no header: both answer from the newest release.
-
-Measured on bunny.net on 2026-11-18 and 2026-11-19, with release A on its own pull zone and B on the main one:
-
-- An asset with `?dpl=A`, a server island fetch and an action called with `x-deployment-id: A` answered with A's code and files. Without the tag they answered with B's.
-- An action called with `x-deployment-id: A` and another site's `Origin` answered 403.
-- On A's pull zone directly, `x-forwarded-host` without the secret, or with a wrong one, was ignored. A page that echoes every request header did not show the secret.
-- A new pull zone overrides cache-control for 30 days and ignores the query string by default. A kept release's pull zone needs the settings below, or one rendered response is served for every query.
-- "Forward Host Header" on a pull zone with storage as its origin stayed off, and setting `Host` on the rule answered 508 Loop Detected: a hostname belongs to one pull zone.
-
-Limits:
-
-- Every kept release takes a pull zone, a script and one edge rule from the 50, and two of the 5 patterns a trigger takes on the rewrite rule.
-- A script secret reads back empty from the API, so the tool sets it in the script and in the rule in one go, or makes a new one.
-- A request tagged only by the header shares the cache key of the newest release. Rendered responses are `private, no-store` unless a route sets otherwise.
+The redirect and header rules belong to the pull zone, not to the release, so they change in a separate step after the switch. Until they do, a prerendered page of the new release can get the Content-Security-Policy of the old one. How long that lasts is untested.
 
 ## Pull zone settings
 
@@ -129,22 +97,22 @@ A site without `dist/index.js` has no script to set headers or answer 404s, so t
 
 - **Pull zone:** `CacheControlMaxAgeOverride: 2592000` and `CacheControlPublicMaxAgeOverride: 0`. Taken from `bunny sites`; untested on our zones.
 - **Edge rule:** URL `*/_astro/*` sets the response header `Cache-Control: public, max-age=31536000, immutable`. When `build.assets` is not `_astro`, use that folder name. `bunny sites` instead gives browsers one day per extension (`css`, `js`, `svg`, `png`, `woff2` and more); a hashed folder can be cached for longer.
-- **Storage zone 404:** as for deploy folders above.
+- **Storage zone 404:** `Custom404FilePath` set to `/404.html` on the release's storage zone when the build has a `404.html`, else empty; `Rewrite404To200` off. A site with a script needs it too when `404.astro` is prerendered: the script passes this page on for a path no route answers. The setting belongs to the storage zone, so it switches with the release.
 
-Without settings, storage answered every file with `max-age=25600000`, and a missing path with bunny.net's own 404 page. Measured earlier without deploy folders: the `*/_astro/*` rule above, a second rule setting `public, max-age=0, must-revalidate` on every other URL, and `Custom404FilePath: /404.html` made a static site answer as a site with a script does.
+Without settings, storage answered every file with `max-age=25600000`, and a missing path with bunny.net's own 404 page. Measured earlier: the `*/_astro/*` rule above, a second rule setting `public, max-age=0, must-revalidate` on every other URL, and `Custom404FilePath: /404.html` made a static site answer as a site with a script does.
 
 A site with a script must not get the cache override or these rules: the script sets `Cache-Control` itself.
 
 ## Base
 
-With `base: '/docs'`, Astro writes `dist/client` without the `docs` folder, but every URL the site links to starts with `/docs/`. Upload `dist/client` to `deploys/<id>/docs/`, or to `docs/` without deploy folders, so stored paths match the URLs; the script then strips nothing for storage, and a static site needs no rule for it. The manifest names the base in `astroAdapterBunny.base`.
+With `base: '/docs'`, Astro writes `dist/client` without the `docs` folder, but every URL the site links to starts with `/docs/`. Upload `dist/client` to `docs/` in the release's storage zone, so stored paths match the URLs; the script then strips nothing for storage, and a static site needs no rule for it. The manifest names the base in `astroAdapterBunny.base`.
 
-- `Custom404FilePath` becomes `/deploys/<id>/docs/404.html`.
+- `Custom404FilePath` becomes `/docs/404.html`.
 - A static site's asset rule matches `*/docs/_astro/*`.
 - A path outside the base finds nothing in storage and answers the 404 page.
 - `dist/client/_redirects` puts the base in front of each source. Astro answers a redirect with the target as written, without the base, and so does an edge rule made from the file.
 
-Measured on bunny.net on 2026-11-15: a build with `base: '/docs'` uploaded under `docs/` passed 14 checks, from the root and from a deploy folder.
+Measured on bunny.net on 2026-11-15: a build with `base: '/docs'` uploaded under `docs/` passed 14 checks.
 
 ## Trailing slash
 
@@ -189,7 +157,7 @@ Measured on bunny.net on 2026-11-15:
 
 Limits:
 
-- A pull zone has at most 50 edge rules by default. The deploy folder rules take 2 or 3, and a static site's asset rule 1 more. bunny.net support can raise the limit.
+- A pull zone has at most 50 edge rules by default. A static site's asset rule takes 1. bunny.net support can raise the limit.
 - A parameter has to be a whole path segment. A source like `/old-:id` cannot become `%{Path.N}`.
 
 Mark the rules the tool creates, for example by a fixed prefix in the description, and replace only those on every deploy. Leave rules the site owner added alone.
@@ -222,7 +190,7 @@ Limits: every distinct value takes one edge rule, from the same 50 as the redire
 
 - **Secrets** from `astro:env` (`access: 'secret'`) and anything read through `process.env` at runtime are script variables.
 - A script takes 128 variables (129 breaks startup), 2 KB per value at runtime, and the API refuses values over 4,096 characters. About 242 to 254 KB of values in total answered 431.
-- Variables are not part of a release, so they do not roll back with the code.
+- Variables belong to a script, and every release has its own script, so the tool sets them all on every deploy. A rollback brings back the values the earlier release had, including ones revoked since.
 
 ## Optional
 

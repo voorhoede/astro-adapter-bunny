@@ -59,18 +59,7 @@ publish() { (cd ${1:h} && timeout 120 bunny scripts deploy ${1:t} $BUNNY_TEST_SC
 purge() { api POST /pullzone/$BUNNY_TEST_PULL_ZONE_ID/purgeCache >/dev/null 2>&1; }
 settle() { perl -e 'select(undef,undef,undef,40)'; }
 
-# rules <deploy id>: the deploy folder edge rules; rules_down removes them.
-rules() {
-  python3 -I - $BUNNY_TEST_PULL_ZONE_ID $BUNNY_TEST_STORAGE_ZONE_ID $BUNNY_TEST_STORAGE_ZONE $1 <<'PY'
-import json, subprocess, sys
-pz, zone_id, zone, dep = sys.argv[1:]
-def post(body):
-    r = subprocess.run(["perl", "-e", "alarm 60; exec @ARGV", "bunny", "api", "POST", f"/pullzone/{pz}/edgerules/addOrUpdate", "--body", json.dumps(body)], capture_output=True, text=True)
-    if r.returncode: print("rule failed", body["Description"], (r.stdout + r.stderr)[:200])
-post({"Description": "aab-live-gate", "Enabled": True, "ActionType": 4, "TriggerMatchingType": 0, "Triggers": [{"Type": 0, "PatternMatches": ["*/deploys/*"], "PatternMatchingType": 0}]})
-post({"Description": "aab-live-origin", "Enabled": True, "ActionType": 17, "ActionParameter1": zone_id, "ActionParameter2": zone, "ActionParameter3": f"/deploys/{dep}", "ExtraActions": [{"ActionType": 6, "ActionParameter1": "X-Bunny-Deploy", "ActionParameter2": dep}], "TriggerMatchingType": 0, "Triggers": [{"Type": 0, "PatternMatches": ["*/deploys/*"], "PatternMatchingType": 2}]})
-PY
-}
+# rules_down removes the edge rules the live checks added.
 rules_down() {
   for g in $(api GET /pullzone/$BUNNY_TEST_PULL_ZONE_ID 2>/dev/null | python3 -I -c 'import json,sys;[print(r["Guid"]) for r in json.load(sys.stdin)["EdgeRules"] if r["Description"].startswith("aab-live-")]'); do
     api DELETE /pullzone/$BUNNY_TEST_PULL_ZONE_ID/edgerules/$g >/dev/null 2>&1 || echo "rule delete failed $g"
@@ -79,11 +68,9 @@ rules_down() {
 
 storage_404() { api POST /storagezone/$BUNNY_TEST_STORAGE_ZONE_ID --body "{\"Custom404FilePath\":\"$1\",\"Rewrite404To200\":false}" >/dev/null 2>&1; }
 
-# deploy <app dir> [deploy id]: build, clear the zone, upload, publish, purge. BASE_PATH uploads under the site's base.
+# deploy <app dir>: build, clear the zone, upload, publish, purge. BASE_PATH uploads under the site's base.
 deploy() {
-  local app=$1 prefix=""
-  [ -n "$2" ] && prefix="deploys/$2"
-  [ -n "$BASE_PATH" ] && prefix="${prefix:+$prefix/}${BASE_PATH#/}"
+  local app=$1 prefix="${BASE_PATH#/}"
   build $app || return 1
   clear_zone
   upload $app/dist/client $prefix

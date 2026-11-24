@@ -1,6 +1,6 @@
 ---
-status: accepted; open (secrets per commit script, skew protection across storage zones, switching measured from one edge location only)
-date: 2026-11-23
+status: accepted; open (secrets per commit script, switching measured from one edge location only)
+date: 2026-11-23, rewritten 2026-11-24
 ---
 
 # A storage zone and script per commit, and pull zones that point at one
@@ -70,7 +70,7 @@ For the choices that are not about the build, such as storage region, tier and r
 - Bad: variables and secrets belong to a release's script, so a deploy sets them all again, and a rollback brings back the values its release had, including revoked ones.
 - Bad: a commit has no URL of its own, so a release is first checked on its branch's pull zone, after visitors of that branch already reach it.
 - Bad: a zone's name stays taken for at least 10 minutes after it is deleted, so redeploying a commit whose release was just deleted fails until bunny.net releases the name.
-- Bad: serving an older release's files to a visitor who still runs its pages now crosses storage zones, which the script does not do yet.
+- Bad: after a switch, a page that is open answers 404 for late assets of its own release, and its server islands and actions run the new release, until the visitor reloads.
 
 ### Confirmation
 

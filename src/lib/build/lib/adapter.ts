@@ -1,18 +1,9 @@
 import type { AstroAdapter } from "astro";
-import {
-  DEPLOY_ID_HEADER,
-  DEPLOY_ID_QUERY,
-} from "../../runtime/lib/deploy-id.ts";
 
 /**
- * What the adapter declares to Astro. With a deploy id, Astro tags asset URLs
- * and its own fetches with it, so an edge rule can send a page's later
- * requests to the deploy that served it.
+ * What the adapter declares to Astro.
  */
-export function adapter(
-  buildOutput: "static" | "server",
-  deployId: string | undefined,
-): AstroAdapter {
+export function adapter(buildOutput: "static" | "server"): AstroAdapter {
   return {
     name: "astro-adapter-bunny",
     entrypointResolution: "auto",
@@ -27,12 +18,6 @@ export function adapter(
       preserveBuildServerDir: true,
       staticHeaders: true,
     },
-    ...(deployId && {
-      client: {
-        assetQueryParams: new URLSearchParams({ [DEPLOY_ID_QUERY]: deployId }),
-        internalFetchHeaders: { [DEPLOY_ID_HEADER]: deployId },
-      },
-    }),
     supportedAstroFeatures: {
       staticOutput: "stable",
       hybridOutput: "stable",

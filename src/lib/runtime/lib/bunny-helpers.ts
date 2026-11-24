@@ -2,8 +2,6 @@ import { getValidatedIpFromHeader } from "@astrojs/internal-helpers/request";
 import type { BaseApp } from "astro/app";
 import { withStoredCacheControl } from "./cache-control.ts";
 import { withContentType } from "./content-type.ts";
-import { addDeployFolder, removeDeployFolder } from "./deploy-folder.ts";
-import { FORWARD_SECRET_HEADER, getForwardedHost } from "./deploy-id.ts";
 
 /**
  * Extracts the client IP address from the `x-real-ip` header.
@@ -16,9 +14,9 @@ export function getClientAddress(request: Request): string | undefined {
 const visitorRequests = new WeakMap<Request, Request>();
 
 /**
- * Rebuilds the request the visitor made. The script sees the storage origin and
- * the deploy folder instead, which breaks routing, `Astro.url`, absolute
- * redirects, and the origin check on form posts.
+ * Rebuilds the request the visitor made. The script sees the storage origin
+ * instead, which breaks routing, `Astro.url`, absolute redirects, and the
+ * origin check on form posts.
  */
 export function toVisitorRequest(originRequest: Request): Request {
   let visitorRequest = visitorRequests.get(originRequest);
@@ -29,8 +27,7 @@ export function toVisitorRequest(originRequest: Request): Request {
   return visitorRequest;
 }
 
-function buildVisitorRequest(originRequest: Request): Request {
-  const { request } = removeDeployFolder(originRequest);
+function buildVisitorRequest(request: Request): Request {
   const url = new URL(request.url);
 
   const protocol = request.headers
@@ -41,24 +38,20 @@ function buildVisitorRequest(originRequest: Request): Request {
 
   url.port = "";
 
-  const host = getForwardedHost(request) ?? request.headers.get("host");
+  const host = request.headers.get("host");
   if (host) url.host = host;
 
-  const visitorRequest = new Request(url, request);
-  // A page that reads or echoes the request headers would leak the secret. It is deleted in place, because building another Request from this one would move the body again.
-  visitorRequest.headers.delete(FORWARD_SECRET_HEADER);
-  return visitorRequest;
+  return new Request(url, request);
 }
 
 /**
  * The request storage gets: a prerendered page's path rewritten to its file
- * for the `file` and `preserve` build formats, inside the deploy folder.
+ * for the `file` and `preserve` build formats.
  */
 export function toStorageRequest(
-  originRequest: Request,
+  request: Request,
   app: BaseApp,
 ): Promise<Request> {
-  const { request, folder } = removeDeployFolder(originRequest);
   const url = new URL(request.url);
   const routeData = app.match(request, true);
   const { buildFormat } = app.manifest;
@@ -76,7 +69,7 @@ export function toStorageRequest(
     url.pathname = `${path}.html`;
   }
 
-  return Promise.resolve(addDeployFolder(new Request(url, request), folder));
+  return Promise.resolve(new Request(url, request));
 }
 
 /**
