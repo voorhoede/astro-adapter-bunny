@@ -13,7 +13,7 @@ export class BunnyApiError extends Error {
 }
 
 export type BunnyApi = <T = unknown>(
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body?: unknown,
 ) => Promise<T>;
