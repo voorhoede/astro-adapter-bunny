@@ -18,7 +18,7 @@ export async function writeStaticFiles(
   return {
     hasRedirects: await appendStaticFile(
       join(clientDir, "_redirects"),
-      printRedirects(routes, config.base),
+      printRedirects(routes, config),
     ),
     hasHeaders: await appendStaticFile(join(clientDir, "_headers"), headers),
   };
