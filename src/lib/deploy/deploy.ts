@@ -5,6 +5,7 @@ import { loadConfig } from "./lib/config.ts";
 import { branchName, liveName, pullZoneUrl, releaseName } from "./lib/names.ts";
 import { switchPullZone } from "./lib/pull-zone.ts";
 import { createRelease } from "./lib/release.ts";
+import { rulesForBuild } from "./lib/build-rules.ts";
 
 export { defineConfig } from "./lib/config.ts";
 export type { BunnyConfig, StorageTier } from "./lib/config.ts";
@@ -68,6 +69,8 @@ export async function deploy({
     readBuildManifest(root),
   ]);
   const secrets = secretsFor(manifest.requires?.env ?? [], env);
+  const { rules, warnings } = await rulesForBuild(root, manifest);
+  for (const warning of warnings) console.warn(warning);
   const api = createBunnyApi();
   const check = {
     commit,
@@ -83,6 +86,7 @@ export async function deploy({
     branch,
     variables,
     secrets,
+    rules,
   });
   await waitForRelease(release.url, check);
 
@@ -92,7 +96,7 @@ export async function deploy({
     ...(branch === config.productionBranch ? [liveName(config.name)] : []),
   ];
   for (const name of targets) {
-    await switchPullZone(api, name, release);
+    await switchPullZone(api, name, release, rules);
     await waitForRelease(pullZoneUrl(name), check);
   }
 

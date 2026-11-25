@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { BuildManifest } from "./build-manifest.ts";
 import type { BunnyApi } from "./bunny-api.ts";
 import type { ResolvedConfig } from "./config.ts";
+import type { EdgeRule } from "./edge-rules.ts";
 import { pullZoneUrl, releaseName } from "./names.ts";
 import { findOrCreatePullZone } from "./pull-zone.ts";
 import { findOrCreateScript, publishScript } from "./script.ts";
@@ -41,6 +42,7 @@ export async function createRelease(
     branch,
     variables,
     secrets,
+    rules,
   }: {
     root: string;
     config: ResolvedConfig;
@@ -49,6 +51,7 @@ export async function createRelease(
     branch: string;
     variables: Record<string, string>;
     secrets: Record<string, string>;
+    rules: EdgeRule[];
   },
 ): Promise<Release> {
   const name = releaseName(config.name, commit);
@@ -67,7 +70,7 @@ export async function createRelease(
     findOrCreatePullZone(api, name, {
       storageZoneId: storageZone.Id,
       scriptId: script?.Id,
-    }),
+    }, rules),
     (async () => {
       // The redirect and header files become edge rules; they are not for visitors.
       const skip = [
