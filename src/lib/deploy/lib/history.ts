@@ -19,6 +19,7 @@ export type ReleaseInfo = {
 };
 
 export type PullZoneInfo = {
+  id: number;
   name: string;
   url: string;
   kind: "live" | "branch";
@@ -49,7 +50,8 @@ export async function readSite(
   // A commit pull zone has the name of its release; the rest of the site's pull zones move.
   const pullZones: PullZoneInfo[] = allPullZones
     .filter(({ Name }) => isSite.test(Name) && !isRelease.test(Name))
-    .map(({ Name, StorageZoneId }) => ({
+    .map(({ Id, Name, StorageZoneId }) => ({
+      id: Id,
       name: Name,
       url: pullZoneUrl(Name),
       kind: Name === liveName(site) ? "live" : "branch",

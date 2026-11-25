@@ -3,6 +3,7 @@ import { createBunnyApi } from "./lib/bunny-api.ts";
 import { waitForRelease } from "./lib/check.ts";
 import { loadConfig } from "./lib/config.ts";
 import { branchName, liveName, pullZoneUrl, releaseName } from "./lib/names.ts";
+import { pruneReleases, teardownBranch } from "./lib/clean-up.ts";
 import { findByName } from "./lib/find-by-name.ts";
 import { readSite } from "./lib/history.ts";
 import { type PullZone, readEdgeRules, switchPullZone } from "./lib/pull-zone.ts";
@@ -51,12 +52,16 @@ export type DeployResult = {
   branchUrl: string;
   /** Live's `b-cdn.net` URL, when the branch is the production branch. */
   liveUrl?: string;
+  /** The releases the deploy deleted because no branch keeps them. */
+  deleted: string[];
 };
 
 /**
  * Deploys a build: makes the commit's release and checks it on the commit's
  * URL, then moves the branch's pull zone to it, and live too for the
- * production branch, checking each. Reads `bunny.config.ts`,
+ * production branch, checking each, and deletes the releases no branch keeps
+ * any more. A site deploys one thing at a time: a switch during a clean-up
+ * could point a pull zone at a release being deleted. Reads `bunny.config.ts`,
  * `.bunny/build.json` and the build, and calls bunny.net with
  * `BUNNYNET_API_KEY`.
  */
@@ -102,8 +107,12 @@ export async function deploy({
     await waitForRelease(pullZoneUrl(name), check);
   }
 
+  // Only after the switch, so the release the branch left is no longer served and can go.
+  const deleted = await pruneReleases(api, config);
+
   const [branchTarget, liveTarget] = targets as [string, string?];
   return {
+    deleted,
     release: release.name,
     url: release.url,
     branchUrl: pullZoneUrl(branchTarget),
@@ -168,6 +177,19 @@ export async function rollback({
   });
 
   return { release: name, url: pullZoneUrl(target) };
+}
+
+/**
+ * Removes what a branch left behind, such as a closed pull request: its pull
+ * zone, and the releases only it deployed. Never the production branch, and
+ * never a release a pull zone points at.
+ */
+export async function teardown({
+  branch,
+  root = process.cwd(),
+}: Options & { branch: string }): Promise<{ pullZone?: string; releases: string[] }> {
+  const config = await loadConfig(root);
+  return teardownBranch(createBunnyApi(), config, branch);
 }
 
 // Fails before anything is made when a secret the build requires has no value.

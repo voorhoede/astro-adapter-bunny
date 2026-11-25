@@ -35,3 +35,15 @@ export async function writeReleaseFile(
   };
   await putFile(zone, RELEASE_FILE, JSON.stringify(file));
 }
+
+/** Takes a branch out of the file, for a teardown of one branch of a release several branches deployed. */
+export async function removeBranch(
+  zone: StorageZone,
+  branch: string,
+): Promise<void> {
+  const current = await readReleaseFile(zone);
+  if (!current || !(branch in current.branches)) return;
+
+  const { [branch]: _, ...branches } = current.branches;
+  await putFile(zone, RELEASE_FILE, JSON.stringify({ ...current, branches }));
+}
