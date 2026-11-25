@@ -66,6 +66,15 @@ export async function uploadDirectory(
   return files.length;
 }
 
+/** Writes one file, trying again while a new zone still refuses uploads. */
+export async function putFile(
+  zone: StorageZone,
+  path: string,
+  body: string,
+): Promise<void> {
+  await withRetries(() => uploadFile(zone, path, Buffer.from(body)));
+}
+
 async function uploadFile(
   zone: StorageZone,
   path: string,

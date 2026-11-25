@@ -8,16 +8,23 @@ import { findOrCreatePullZone } from "./pull-zone.ts";
 import { findOrCreateScript, publishScript } from "./script.ts";
 import {
   findOrCreateStorageZone,
+  putFile,
   setNotFoundPage,
   uploadDirectory,
 } from "./storage-zone.ts";
 
 export type Release = {
   name: string;
+  commit: string;
   url: string;
   storageZoneId: number;
   scriptId?: number;
 };
+
+/** Where a release's file sits under the site's base, such as `/docs/.bunny/release.json`. */
+export function releaseFilePath(base: string): string {
+  return `${base.replace(/\/?$/, "/")}.bunny/release.json`;
+}
 
 /**
  * Makes a commit's release: its storage zone and script at the same time, then
@@ -31,6 +38,7 @@ export async function createRelease(
     config,
     manifest,
     commit,
+    branch,
     variables,
     secrets,
   }: {
@@ -38,6 +46,7 @@ export async function createRelease(
     config: ResolvedConfig;
     manifest: BuildManifest;
     commit: string;
+    branch: string;
     variables: Record<string, string>;
     secrets: Record<string, string>;
   },
@@ -70,6 +79,12 @@ export async function createRelease(
       if (await exists(join(clientDir, "404.html"))) {
         await setNotFoundPage(api, storageZone, `/${inBase("404.html")}`);
       }
+      // Written after the other files, so a pull zone that answers with it has all of them.
+      await putFile(
+        storageZone,
+        releaseFilePath(manifest.astroAdapterBunny.base).slice(1),
+        JSON.stringify({ commit, branch, deployedAt: new Date().toISOString() }),
+      );
     })(),
     script && manifest.script
       ? publishScript(api, script, {
@@ -82,6 +97,7 @@ export async function createRelease(
 
   return {
     name,
+    commit,
     url: pullZoneUrl(name),
     storageZoneId: storageZone.Id,
     ...(script && { scriptId: script.Id }),

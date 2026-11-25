@@ -1,61 +1,55 @@
-import { readdir } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
-import type { BuildManifest } from "./build-manifest.ts";
+import { releaseFilePath } from "./release.ts";
 
 /**
- * Waits until a new pull zone answers: a stored file of the build with 200,
- * and for a site with a script, its base path with anything but a server
- * error. A new pull zone served its first file after about 5 s.
+ * Waits until a pull zone answers with a release: its release file names the
+ * commit, and for a site with a script, the base path answers anything but a
+ * server error. A new pull zone served its first file after about 5 s, and a
+ * switched one answered with the new release 2 to 7 s after the switch.
  */
-export async function waitUntilServing(
+export async function waitForRelease(
   url: string,
-  { root, manifest }: { root: string; manifest: BuildManifest },
+  { commit, base, hasScript }: { commit: string; base: string; hasScript: boolean },
   { timeout = 120_000 }: { timeout?: number } = {},
 ): Promise<void> {
-  const base = manifest.astroAdapterBunny.base.replace(/\/?$/, "/");
-  const file = await anyStoredFile(join(root, manifest.assets.dir), manifest);
-  const probes = [
-    ...(file ? [{ path: `${base}${file}`, ok: (status: number) => status === 200 }] : []),
-    ...(manifest.script ? [{ path: base, ok: (status: number) => status < 500 }] : []),
-  ];
-
   const deadline = Date.now() + timeout;
-  for (const probe of probes) {
-    let last = "no answer";
-    for (;;) {
-      try {
-        const response = await fetch(`${url}${probe.path}?check=${Date.now()}`, {
-          redirect: "manual",
-        });
-        await response.body?.cancel();
-        if (probe.ok(response.status)) break;
-        last = String(response.status);
-      } catch (error) {
-        last = String(error);
-      }
 
-      if (Date.now() > deadline) {
-        throw new Error(`${url}${probe.path} did not answer in time; last: ${last}.`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+  await poll(`${url}${releaseFilePath(base)}`, deadline, async (response) => {
+    if (response.status !== 200) return `answered ${response.status}`;
+    const file = (await response.json()) as { commit?: string };
+    return file.commit === commit ? true : `serves commit ${file.commit}`;
+  });
+
+  if (hasScript) {
+    await poll(`${url}${base}`, deadline, async (response) =>
+      response.status < 500 ? true : `answered ${response.status}`,
+    );
   }
 }
 
-// A file in the assets folder has a hashed name, so it can only come from this build.
-async function anyStoredFile(
-  dir: string,
-  manifest: BuildManifest,
-): Promise<string | undefined> {
-  const files = (await readdir(dir, { recursive: true, withFileTypes: true }))
-    .filter((entry) => entry.isFile())
-    .map((entry) =>
-      relative(dir, join(entry.parentPath, entry.name)).split(sep).join("/"),
-    )
-    .filter((path) => !path.startsWith("_redirects") && !path.startsWith("_headers"));
+async function poll(
+  url: string,
+  deadline: number,
+  accept: (response: Response) => Promise<true | string>,
+): Promise<void> {
+  let last = "no answer";
 
-  return (
-    files.find((path) => path.startsWith(`${manifest.astroAdapterBunny.assetsDir}/`)) ??
-    files[0]
-  );
+  for (;;) {
+    try {
+      // A unique query string keeps every try past the cache.
+      const response = await fetch(`${url}?check=${Date.now()}`, {
+        redirect: "manual",
+      });
+      const result = await accept(response);
+      if (!response.bodyUsed) await response.body?.cancel();
+      if (result === true) return;
+      last = result;
+    } catch (error) {
+      last = String(error);
+    }
+
+    if (Date.now() > deadline) {
+      throw new Error(`${url} did not answer with the release in time: ${last}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 }

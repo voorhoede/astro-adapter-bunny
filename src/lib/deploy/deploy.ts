@@ -1,8 +1,9 @@
 import { readBuildManifest } from "./lib/build-manifest.ts";
 import { createBunnyApi } from "./lib/bunny-api.ts";
-import { waitUntilServing } from "./lib/check.ts";
+import { waitForRelease } from "./lib/check.ts";
 import { loadConfig } from "./lib/config.ts";
-import { branchName, pullZoneUrl, releaseName } from "./lib/names.ts";
+import { branchName, liveName, pullZoneUrl, releaseName } from "./lib/names.ts";
+import { switchPullZone } from "./lib/pull-zone.ts";
 import { createRelease } from "./lib/release.ts";
 
 export { defineConfig } from "./lib/config.ts";
@@ -30,41 +31,78 @@ export async function url(
 export type DeployOptions = Options & {
   /** The full hash of the commit that was built. */
   commit: string;
+  /** The branch the commit was built from. Its pull zone moves to the release. */
+  branch: string;
   /** Plain script variables, such as values the site reads through `process.env`. */
   variables?: Record<string, string>;
   /** Where the values of the build's `astro:env` secrets come from. Defaults to `process.env`. */
   env?: Record<string, string | undefined>;
 };
 
+export type DeployResult = {
+  release: string;
+  /** The commit's URL, which keeps answering with this release. */
+  url: string;
+  /** The branch's URL, which now answers with this release. */
+  branchUrl: string;
+  /** Live's `b-cdn.net` URL, when the branch is the production branch. */
+  liveUrl?: string;
+};
+
 /**
  * Deploys a build: makes the commit's release and checks it on the commit's
- * URL. Reads `bunny.config.ts`, `.bunny/build.json` and the build, and calls
- * bunny.net with `BUNNYNET_API_KEY`.
+ * URL, then moves the branch's pull zone to it, and live too for the
+ * production branch, checking each. Reads `bunny.config.ts`,
+ * `.bunny/build.json` and the build, and calls bunny.net with
+ * `BUNNYNET_API_KEY`.
  */
 export async function deploy({
   commit,
+  branch,
   variables = {},
   env = process.env,
   root = process.cwd(),
-}: DeployOptions): Promise<{ release: string; url: string }> {
+}: DeployOptions): Promise<DeployResult> {
   const [config, manifest] = await Promise.all([
     loadConfig(root),
     readBuildManifest(root),
   ]);
   const secrets = secretsFor(manifest.requires?.env ?? [], env);
   const api = createBunnyApi();
+  const check = {
+    commit,
+    base: manifest.astroAdapterBunny.base,
+    hasScript: manifest.script !== undefined,
+  };
 
   const release = await createRelease(api, {
     root,
     config,
     manifest,
     commit,
+    branch,
     variables,
     secrets,
   });
-  await waitUntilServing(release.url, { root, manifest });
+  await waitForRelease(release.url, check);
 
-  return { release: release.name, url: release.url };
+  // Visitors of the branch get the release only after it answered on its own URL.
+  const targets = [
+    branchName(config.name, branch),
+    ...(branch === config.productionBranch ? [liveName(config.name)] : []),
+  ];
+  for (const name of targets) {
+    await switchPullZone(api, name, release);
+    await waitForRelease(pullZoneUrl(name), check);
+  }
+
+  const [branchTarget, liveTarget] = targets as [string, string?];
+  return {
+    release: release.name,
+    url: release.url,
+    branchUrl: pullZoneUrl(branchTarget),
+    ...(liveTarget && { liveUrl: pullZoneUrl(liveTarget) }),
+  };
 }
 
 // Fails before anything is made when a secret the build requires has no value.

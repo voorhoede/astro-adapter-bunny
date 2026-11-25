@@ -56,3 +56,18 @@ export async function findOrCreatePullZone(
 
   return pullZone;
 }
+
+/**
+ * Points a branch's pull zone or live at a release, making it on its first
+ * deploy. Origin type, storage zone and script change in one call and a purge
+ * follows: without either, the edge kept the old storage zone for minutes.
+ */
+export async function switchPullZone(
+  api: BunnyApi,
+  name: string,
+  release: { storageZoneId: number; scriptId?: number },
+): Promise<PullZone> {
+  const pullZone = await findOrCreatePullZone(api, name, release);
+  await api("POST", `/pullzone/${pullZone.Id}/purgeCache`);
+  return pullZone;
+}
