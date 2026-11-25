@@ -1,0 +1,63 @@
+name: astro-adapter-bunny deploy
+description: Deploys a build to bunny.net, checks it on the commit's URL, then moves the branch, and live for the production branch.
+
+inputs:
+  api-key:
+    description: The API key of the bunny.net account.
+    required: true
+  commit:
+    description: The commit that was built. Defaults to the pull request's own commit, or the pushed one.
+    default: ${{ github.event.pull_request.head.sha || github.sha }}
+  branch:
+    description: The branch it was built from. Defaults to the pull request's branch, or the pushed branch.
+    default: ${{ github.head_ref || github.ref_name }}
+  variables:
+    description: Plain script variables, one NAME=value per line. Pass the build's astro:env secrets as env on this step.
+    default: ""
+  working-directory:
+    description: The project root, with bunny.config.ts, the build and astro-adapter-bunny installed.
+    default: .
+
+outputs:
+  release:
+    description: The release's name.
+    value: ${{ steps.deploy.outputs.release }}
+  url:
+    description: The commit's URL, which keeps answering with this release.
+    value: ${{ steps.deploy.outputs.url }}
+  branch-url:
+    description: The branch's URL.
+    value: ${{ steps.deploy.outputs.branch-url }}
+  live-url:
+    description: Live's b-cdn.net URL, for the production branch only.
+    value: ${{ steps.deploy.outputs.live-url }}
+
+runs:
+  using: composite
+  steps:
+    - id: deploy
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        BUNNYNET_API_KEY: ${{ inputs.api-key }}
+        COMMIT: ${{ inputs.commit }}
+        BRANCH: ${{ inputs.branch }}
+        VARIABLES: ${{ inputs.variables }}
+      run: |
+        node --input-type=module -e '
+          import { appendFileSync } from "node:fs";
+          const { deploy } = await import("astro-adapter-bunny/deploy").catch((error) => {
+            if (error.code !== "ERR_MODULE_NOT_FOUND") throw error;
+            throw new Error("Install astro-adapter-bunny in the project before this step.");
+          });
+          const variables = Object.fromEntries(
+            process.env.VARIABLES.split("\n").filter((line) => line.includes("=")).map((line) => {
+              const at = line.indexOf("=");
+              return [line.slice(0, at).trim(), line.slice(at + 1)];
+            }),
+          );
+          const result = await deploy({ commit: process.env.COMMIT, branch: process.env.BRANCH, variables });
+          console.log(result);
+          const outputs = { release: result.release, url: result.url, "branch-url": result.branchUrl, "live-url": result.liveUrl ?? "" };
+          appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(outputs).map(([name, value]) => `${name}=${value}\n`).join(""));
+        '

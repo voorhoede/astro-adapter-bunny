@@ -1,0 +1,36 @@
+name: astro-adapter-bunny url
+description: The URL a branch answers on, before its pull zone exists, to pass to the build as site.
+
+inputs:
+  branch:
+    description: The branch. Defaults to the pull request's branch, or the pushed branch.
+    default: ${{ github.head_ref || github.ref_name }}
+  working-directory:
+    description: The project root, with bunny.config.ts and astro-adapter-bunny installed.
+    default: .
+
+outputs:
+  url:
+    description: The branch's URL.
+    value: ${{ steps.url.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - id: url
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        BRANCH: ${{ inputs.branch }}
+      # Imports the package the project installed, so the action and the build use the same version.
+      run: |
+        node --input-type=module -e '
+          import { appendFileSync } from "node:fs";
+          const { url } = await import("astro-adapter-bunny/deploy").catch((error) => {
+            if (error.code !== "ERR_MODULE_NOT_FOUND") throw error;
+            throw new Error("Install astro-adapter-bunny in the project before this step.");
+          });
+          const value = await url({ branch: process.env.BRANCH });
+          console.log(value);
+          appendFileSync(process.env.GITHUB_OUTPUT, `url=${value}\n`);
+        '

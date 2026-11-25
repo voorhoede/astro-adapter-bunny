@@ -4,7 +4,9 @@
 # - bunny.config.ts in the project root, with the site's name;
 # - the repository secret BUNNYNET_API_KEY, the API key of the bunny.net account;
 # - the repository secret ASTRO_KEY, from `npx astro create-key`, the same for every build;
-# - every astro:env secret the site uses, passed to the deploy step below.
+# - every astro:env secret the site uses, as env on the deploy step.
+#
+# Pin the actions to a tag or commit of astro-adapter-bunny instead of main.
 
 name: Deploy
 
@@ -26,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ steps.deploy.outputs.url }}
+      url: ${{ steps.deploy.outputs.live-url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -38,17 +40,9 @@ jobs:
         env:
           ASTRO_KEY: ${{ secrets.ASTRO_KEY }}
       - id: deploy
-        run: |
-          node --input-type=module -e '
-            import { appendFileSync } from "node:fs";
-            import { deploy } from "astro-adapter-bunny/deploy";
-            const result = await deploy({ commit: process.env.COMMIT, branch: process.env.BRANCH });
-            console.log(result);
-            appendFileSync(process.env.GITHUB_OUTPUT, `url=${result.liveUrl}\n`);
-          '
-        env:
-          COMMIT: ${{ github.sha }}
-          BRANCH: ${{ github.ref_name }}
-          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
-          # The site's astro:env secrets, for example:
-          # SECRET_MESSAGE: ${{ secrets.SECRET_MESSAGE }}
+        uses: voorhoede/astro-adapter-bunny/actions/deploy@main
+        with:
+          api-key: ${{ secrets.BUNNYNET_API_KEY }}
+        # The site's astro:env secrets, for example:
+        # env:
+        #   SECRET_MESSAGE: ${{ secrets.SECRET_MESSAGE }}
