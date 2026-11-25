@@ -7,8 +7,8 @@ import {
   methodNotAllowed,
   toStorageRequest,
 } from "./lib/bunny-helpers.ts";
-import { needsTrailingSlashRedirect } from "./lib/needs-trailing-slash-redirect.ts";
 import { renderApp } from "./lib/render-app.ts";
+import { trailingSlashRedirect } from "./lib/trailing-slash-redirect.ts";
 
 const app = createApp();
 
@@ -23,8 +23,9 @@ BunnySDK.net.http
       return renderApp(request, app);
     }
 
-    if (needsTrailingSlashRedirect(request, app)) {
-      return renderApp(request, app);
+    const redirect = trailingSlashRedirect(request, app);
+    if (redirect) {
+      return Promise.resolve(redirect);
     }
 
     return toStorageRequest(request, app);
