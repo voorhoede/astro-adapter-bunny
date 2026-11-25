@@ -1,6 +1,6 @@
 ---
 status: accepted; open (shielding the storage zone)
-date: 2026-10-28, rewritten 2026-11-15 and 2026-11-24
+date: 2026-10-28, rewritten 2026-11-15, 2026-11-24 and 2026-11-25
 ---
 
 # One middleware script in front of the storage zone
@@ -28,7 +28,7 @@ Measured on bunny.net between 2026-11-09 and 2026-11-10, with a storage zone in 
 
 Only middleware. `bunny()` has no option for the script type, and `src/lib/runtime/script.ts` registers two hooks through `@bunny.net/edgescript-sdk`:
 
-- **A path in the wrong trailing slash form** is rendered by Astro, which redirects it, before storage is asked.
+- **A path in the wrong trailing slash form** answers Astro's own redirect, from `trailingSlash()` in `astro/fetch`, before storage is asked. A file of the build is left alone, since Astro takes any path without an extension, such as `/CNAME`, for a page.
 - **A redirect route** is rendered by Astro, which answers 301 or 308.
 - **A GET or HEAD** goes to the pull zone, so storage is asked first. A 404 from storage is rendered by Astro in the response hook: the on-demand route if one matches, otherwise its own 404 page.
 - **Any other method** is rendered by Astro in the request hook when an on-demand route matches, since the pull zone consumes the body on its way to storage. On a stored file or a prerendered route it answers 405 with `Allow: GET, HEAD`, as storage itself does. Any other path renders Astro's 404 page. No request body reaches storage.

@@ -1,6 +1,6 @@
 ---
 status: accepted; open (whether bunny.net's CLI accepts the manifest)
-date: 2026-10-28, rewritten 2026-11-15 and 2026-11-24
+date: 2026-10-28, rewritten 2026-11-15, 2026-11-24 and 2026-11-25
 ---
 
 # A build manifest in bunny.net's format
@@ -39,7 +39,7 @@ bunny.net's manifest format, and files at the root. The build writes `.bunny/bui
 - Bad: a release deployed by bunny.net's CLI into `deploys/<id>` is not served, since the script reads from the root.
 - Bad: whether bunny.net's CLI accepts this manifest, and what `bunny lab deploy` does with a middleware script, is untested.
 - Bad: a file in the storage zone from an earlier build stays readable and wins over an on-demand route on the same path, so a deploy into a zone that is not new has to remove files the build no longer has.
-- Bad: two pull zone settings the script needs, cache expiration and query strings, have no field in bunny.net's shape, so a deploy tool still learns them from the deploy specification.
+- Bad: three pull zone settings the script needs, cache expiration, query strings and cache slicing, have no field in bunny.net's shape, so a deploy tool still learns them from the deploy specification.
 
 ### Confirmation
 

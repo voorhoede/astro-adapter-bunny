@@ -29,7 +29,7 @@ A custom `outDir` replaces `dist`.
 | `requires.pullZone` | Only for `ssr`: `disableCookies: false` and `enableSmartCache: false`. |
 | `requires.env` | Only for `ssr`: every `astro:env` secret, with `secret: true`, and `optional: true` when it is optional or has a default. |
 | `dev.command` | Only for `ssr`: `astro dev`. |
-| `astroAdapterBunny` | Our own fields, under one key: `trailingSlash`, `buildFormat`, `assetsDir`, `redirects` (the path of `dist/client/_redirects`, when it exists), `headers` (the path of `dist/client/_headers`, when it exists). |
+| `astroAdapterBunny` | Our own fields, under one key: `trailingSlash`, `base`, `buildFormat`, `assetsDir`, `redirects` (the path of `dist/client/_redirects`, when it exists), `headers` (the path of `dist/client/_headers`, when it exists). |
 
 Paths are relative to the project root and use forward slashes. bunny.net's contract says its CLI ignores fields it does not know; whether its CLI accepts this manifest is untested.
 
@@ -127,7 +127,7 @@ A static site has no script. Edge rules can do part of it, measured on 2026-11-1
 
 ## Redirects
 
-The adapter sets `build.redirects: false`, so Astro writes no meta refresh pages, and writes Astro's `redirects` to `dist/client/_redirects`. On a site with a script, the script answers these redirects itself with a real 301 or 308, so edge rules are optional there: they answer before the script runs. A static site has no script, so without edge rules its redirects answer 404. Each line has a source, a target and a status:
+The adapter sets `build.redirects: false`, so Astro writes no meta refresh pages, and writes Astro's `redirects` to `dist/client/_redirects`. On a site with a script, the script answers these redirects itself with a real 301 or 308, so edge rules are optional there: they answer before the script runs. A static site has no script, so without edge rules its redirects answer 404. Each line has a source, a target and a status, as Astro's own redirect answers a GET: a configured status only when the target is a route, and 301 otherwise:
 
 ```
 /old /about 301

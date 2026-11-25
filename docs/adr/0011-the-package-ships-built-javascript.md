@@ -35,7 +35,7 @@ Build every export, so every export is loaded the same way and no consumer depen
 ### Consequences
 
 - Good: `astro preview` works from an installed package, and installing needs only npmjs.org.
-- Good: the edge script built from `dist/script.js` held the same code as the one built from the sources: the test app's `dist/index.js` from both differed only in chunk hashes, where the deploy id constants sit, the entrypoint's name and Astro's random key (compared on 2026-11-20).
+- Good: the edge script built from `dist/script.js` held the same code as the one built from the sources: the test app's `dist/index.js` from both differed only in chunk hashes, the entrypoint's name and Astro's random key (compared on 2026-11-20).
 - Bad: `test/adapter-test` and the live checks run `dist/`, so a change in `src/` needs `npm run build` before it shows. `test/live/run.sh` builds first.
 - Bad: `run-script.js` is about 300 kB, most of it the media type table `serveDir` uses.
 
