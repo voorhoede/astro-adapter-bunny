@@ -4,6 +4,7 @@ ROOT=${LIVE:h:h}
 WORK=$LIVE/.work
 mkdir -p $WORK
 [ -f $LIVE/.env ] && source $LIVE/.env
+export BUNNY_PROFILE
 : ${BUNNY_TEST_STORAGE_ZONE:?set it in test/live/.env} ${BUNNY_TEST_STORAGE_ZONE_ID:?} ${BUNNY_TEST_PULL_ZONE_ID:?} ${BUNNY_TEST_SCRIPT_ID:?} ${BUNNY_TEST_HOST:?}
 H=$BUNNY_TEST_HOST
 pass=0; fail=0

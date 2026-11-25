@@ -1,6 +1,6 @@
 # usage: python3 -I header-rules.py <pull zone id> <_headers file>
 # Turns _headers into edge rules the way the deploy specification describes.
-import collections, json, subprocess, sys
+import collections, json, os, subprocess, sys
 pz, path = sys.argv[1], sys.argv[2]
 pages, current = collections.defaultdict(dict), None
 for line in open(path):
@@ -12,7 +12,7 @@ for page, headers in pages.items():
     for name, value in headers.items(): by_header[name][value].append(page)
 def pattern(p): return "pattern:^https?://[^/]+" + p.rstrip("/").replace("-", "%-").replace(".", "%.").replace("*", ".*") + "/?$"
 def post(body):
-    r = subprocess.run(["perl", "-e", "alarm 60; exec @ARGV", "bunny", "api", "POST", f"/pullzone/{pz}/edgerules/addOrUpdate", "--body", json.dumps(body)], capture_output=True, text=True)
+    r = subprocess.run(["perl", "-e", "alarm 60; exec @ARGV", "bunny", "--profile", os.environ.get("BUNNY_PROFILE") or "default", "api", "POST", f"/pullzone/{pz}/edgerules/addOrUpdate", "--body", json.dumps(body)], capture_output=True, text=True)
     if r.returncode: print("rule failed", (r.stdout + r.stderr)[:200])
 for name, values in by_header.items():
     missing = {"Type": 2, "Parameter1": name, "PatternMatches": ["*"], "PatternMatchingType": 2}
