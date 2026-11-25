@@ -22,7 +22,8 @@ t() { echo "t=$RANDOM$RANDOM"; }
 report() { echo "[$1] passed $pass, failed $fail"; }
 
 timeout() { local s=$1; shift; perl -e "alarm $s; exec @ARGV" "$@"; }
-api() { timeout 90 bunny api "$@"; }
+# BUNNY_PROFILE in test/live/.env picks the bunny CLI profile; without it the default profile is used.
+api() { timeout 90 bunny --profile ${BUNNY_PROFILE:-default} api "$@"; }
 
 # variant <name>: a copy of test/adapter-test in .work with a changed config and extra pages.
 variant() {
@@ -43,19 +44,19 @@ astro_key() {
 build() { (cd $1 && rm -rf dist .bunny && PUBLIC_SERVER_VALUE=server-at-build ASTRO_KEY=$(astro_key) npx astro build 2>&1 | grep -E "Complete!|rror" | tail -1); }
 
 clear_zone() {
-  for o in $(bunny storage files list / -z $BUNNY_TEST_STORAGE_ZONE --output json 2>/dev/null | python3 -I -c 'import json,sys;[print(x["objectName"]+("/" if x["isDirectory"] else "")) for x in json.load(sys.stdin)]'); do
-    timeout 120 bunny storage files rm "$o" -z $BUNNY_TEST_STORAGE_ZONE -f >/dev/null 2>&1 || echo "rm failed $o"
+  for o in $(bunny --profile ${BUNNY_PROFILE:-default} storage files list / -z $BUNNY_TEST_STORAGE_ZONE --output json 2>/dev/null | python3 -I -c 'import json,sys;[print(x["objectName"]+("/" if x["isDirectory"] else "")) for x in json.load(sys.stdin)]'); do
+    timeout 120 bunny --profile ${BUNNY_PROFILE:-default} storage files rm "$o" -z $BUNNY_TEST_STORAGE_ZONE -f >/dev/null 2>&1 || echo "rm failed $o"
   done
 }
 
 # upload <dir> [prefix]
 upload() {
   (cd $1 && for f in $(find . -type f | sed 's#^\./##'); do
-    timeout 60 bunny storage files upload "$f" -z $BUNNY_TEST_STORAGE_ZONE --to "${2:+$2/}$f" >/dev/null 2>&1 || echo "upload failed $f"
+    timeout 60 bunny --profile ${BUNNY_PROFILE:-default} storage files upload "$f" -z $BUNNY_TEST_STORAGE_ZONE --to "${2:+$2/}$f" >/dev/null 2>&1 || echo "upload failed $f"
   done)
 }
 
-publish() { (cd ${1:h} && timeout 120 bunny scripts deploy ${1:t} $BUNNY_TEST_SCRIPT_ID >/dev/null 2>&1) || echo "publish failed"; }
+publish() { (cd ${1:h} && timeout 120 bunny --profile ${BUNNY_PROFILE:-default} scripts deploy ${1:t} $BUNNY_TEST_SCRIPT_ID >/dev/null 2>&1) || echo "publish failed"; }
 purge() { api POST /pullzone/$BUNNY_TEST_PULL_ZONE_ID/purgeCache >/dev/null 2>&1; }
 settle() { perl -e 'select(undef,undef,undef,40)'; }
 
