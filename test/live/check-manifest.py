@@ -16,6 +16,9 @@ c("manifestVersion", m.get("manifestVersion") == 1)
 c("adapter", m.get("adapter") == {"package": pkg["name"], "version": pkg["version"]})
 c("framework", m.get("framework") == {"name": "astro", "version": astro["version"]})
 x = m.get("astroAdapterBunny", {})
+# The commit is the checkout's, so it is checked for its form and left out of the exact comparisons.
+commit = x.pop("commit", None)
+c("commit", commit is None or (len(commit) == 40 and all(ch in "0123456789abcdef" for ch in commit)))
 if mode == "ssr":
     out = "dist"
     c("kind", m.get("kind") == "ssr")
