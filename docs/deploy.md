@@ -37,7 +37,7 @@ Paths are relative to the project root and use forward slashes. bunny.net's cont
 
 A release is one build of one commit, and is not changed once deployed:
 
-- **A storage zone** that holds the release's `dist/client` at its root, named after the site and the commit's short hash, and `.bunny/release.json` under the site's base with the commit, branch and time of the deploy, which the tool reads to recognize the release on a pull zone.
+- **A storage zone** that holds the release's `dist/client` at its root, named after the site and the commit's short hash, and `.bunny/release.json` at its root, outside the site's base, with the commit and each branch that deployed it with the time, which the tool reads to recognize the release on a pull zone.
 - **A middleware Edge Script** with the release's `dist/index.js` and its variables and secrets, named like the zone, only for sites with `dist/index.js`. A script keeps the type it was created with, so it has to be created as a middleware script, not a standalone one.
 - **A commit pull zone**, named like the zone, with the storage zone as its origin and the script as its middleware. It points at its release for as long as the release exists, so the commit's URL never changes.
 
