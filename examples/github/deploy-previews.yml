@@ -1,0 +1,82 @@
+# Deploys every pull request to its own branch URL, and removes it when the
+# pull request closes. Use it next to deploy-production.yml.
+#
+# Copy to .github/workflows/ in the site's repository. Besides what
+# deploy-production.yml needs, astro.config.mjs reads the URL from SITE, so
+# links and the sitemap point at the preview:
+#
+#   site: process.env.SITE ?? "https://www.example.com",
+#
+# A pull request from a fork gets no secrets, so it cannot deploy.
+
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bunny-deploy
+  cancel-in-progress: false
+
+env:
+  BRANCH: ${{ github.head_ref }}
+  BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
+
+jobs:
+  deploy:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # The branch URL exists before its pull zone does, so the build can use it.
+      - run: |
+          node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            import { url } from "astro-adapter-bunny/deploy";
+            appendFileSync(process.env.GITHUB_ENV, `SITE=${await url({ branch: process.env.BRANCH })}\n`);
+          '
+      - run: npm run build
+        env:
+          ASTRO_KEY: ${{ secrets.ASTRO_KEY }}
+      - id: deploy
+        run: |
+          node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            import { deploy } from "astro-adapter-bunny/deploy";
+            const result = await deploy({ commit: process.env.COMMIT, branch: process.env.BRANCH });
+            console.log(result);
+            appendFileSync(process.env.GITHUB_OUTPUT, `url=${result.branchUrl}\n`);
+          '
+        env:
+          # The pull request's own commit; github.sha would be a merge commit.
+          COMMIT: ${{ github.event.pull_request.head.sha }}
+          # The site's astro:env secrets, for example:
+          # SECRET_MESSAGE: ${{ secrets.SECRET_MESSAGE }}
+
+  teardown:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: |
+          node --input-type=module -e '
+            import { teardown } from "astro-adapter-bunny/deploy";
+            console.log(await teardown({ branch: process.env.BRANCH }));
+          '

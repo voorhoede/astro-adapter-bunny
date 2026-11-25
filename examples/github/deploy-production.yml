@@ -1,0 +1,54 @@
+# Deploys every push to the production branch and moves live to it.
+#
+# Copy to .github/workflows/ in the site's repository. It needs:
+# - bunny.config.ts in the project root, with the site's name;
+# - the repository secret BUNNYNET_API_KEY, the API key of the bunny.net account;
+# - the repository secret ASTRO_KEY, from `npx astro create-key`, the same for every build;
+# - every astro:env secret the site uses, passed to the deploy step below.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy per site at a time: a deploy also deletes old releases.
+concurrency:
+  group: bunny-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          ASTRO_KEY: ${{ secrets.ASTRO_KEY }}
+      - id: deploy
+        run: |
+          node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            import { deploy } from "astro-adapter-bunny/deploy";
+            const result = await deploy({ commit: process.env.COMMIT, branch: process.env.BRANCH });
+            console.log(result);
+            appendFileSync(process.env.GITHUB_OUTPUT, `url=${result.liveUrl}\n`);
+          '
+        env:
+          COMMIT: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
+          # The site's astro:env secrets, for example:
+          # SECRET_MESSAGE: ${{ secrets.SECRET_MESSAGE }}
