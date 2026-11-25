@@ -7,5 +7,5 @@
     "rootDir": "src",
     "outDir": "dist/types"
   },
-  "include": ["src/index.ts"]
+  "include": ["src/index.ts", "src/lib/deploy/deploy.ts"]
 }
