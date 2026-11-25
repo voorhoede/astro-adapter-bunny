@@ -7,9 +7,9 @@ import type { EdgeRule } from "./edge-rules.ts";
 import { pullZoneUrl, releaseName } from "./names.ts";
 import { findOrCreatePullZone } from "./pull-zone.ts";
 import { findOrCreateScript, publishScript } from "./script.ts";
+import { writeReleaseFile } from "./release-file.ts";
 import {
   findOrCreateStorageZone,
-  putFile,
   setNotFoundPage,
   uploadDirectory,
 } from "./storage-zone.ts";
@@ -21,11 +21,6 @@ export type Release = {
   storageZoneId: number;
   scriptId?: number;
 };
-
-/** Where a release's file sits under the site's base, such as `/docs/.bunny/release.json`. */
-export function releaseFilePath(base: string): string {
-  return `${base.replace(/\/?$/, "/")}.bunny/release.json`;
-}
 
 /**
  * Makes a commit's release: its storage zone and script at the same time, then
@@ -83,11 +78,7 @@ export async function createRelease(
         await setNotFoundPage(api, storageZone, `/${inBase("404.html")}`);
       }
       // Written after the other files, so a pull zone that answers with it has all of them.
-      await putFile(
-        storageZone,
-        releaseFilePath(manifest.astroAdapterBunny.base).slice(1),
-        JSON.stringify({ commit, branch, deployedAt: new Date().toISOString() }),
-      );
+      await writeReleaseFile(storageZone, { commit, branch });
     })(),
     script && manifest.script
       ? publishScript(api, script, {

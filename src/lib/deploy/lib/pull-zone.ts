@@ -110,3 +110,31 @@ export async function switchPullZone(
   await api("POST", `/pullzone/${pullZone.Id}/purgeCache`);
   return pullZone;
 }
+
+/** The tool's rules on a pull zone, so a rollback can give a release the rules its own commit pull zone has. */
+export async function readEdgeRules(
+  api: BunnyApi,
+  pullZoneId: number,
+): Promise<EdgeRule[]> {
+  const { EdgeRules } = await api<{ EdgeRules: EdgeRule[] }>(
+    "GET",
+    `/pullzone/${pullZoneId}`,
+  );
+
+  return EdgeRules.filter(({ Description }) =>
+    Description.startsWith(RULE_PREFIX),
+  ).map((rule) => ({
+    Description: rule.Description,
+    Enabled: true,
+    ActionType: rule.ActionType,
+    ...(rule.ActionParameter1 != null && { ActionParameter1: rule.ActionParameter1 }),
+    ...(rule.ActionParameter2 != null && { ActionParameter2: rule.ActionParameter2 }),
+    TriggerMatchingType: rule.TriggerMatchingType,
+    Triggers: rule.Triggers.map((trigger) => ({
+      Type: trigger.Type,
+      ...(trigger.Parameter1 != null && { Parameter1: trigger.Parameter1 }),
+      PatternMatches: trigger.PatternMatches,
+      PatternMatchingType: trigger.PatternMatchingType,
+    })),
+  }));
+}

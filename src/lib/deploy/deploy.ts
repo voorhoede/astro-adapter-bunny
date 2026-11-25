@@ -3,12 +3,15 @@ import { createBunnyApi } from "./lib/bunny-api.ts";
 import { waitForRelease } from "./lib/check.ts";
 import { loadConfig } from "./lib/config.ts";
 import { branchName, liveName, pullZoneUrl, releaseName } from "./lib/names.ts";
-import { switchPullZone } from "./lib/pull-zone.ts";
+import { findByName } from "./lib/find-by-name.ts";
+import { readSite } from "./lib/history.ts";
+import { type PullZone, readEdgeRules, switchPullZone } from "./lib/pull-zone.ts";
 import { createRelease } from "./lib/release.ts";
 import { rulesForBuild } from "./lib/build-rules.ts";
 
 export { defineConfig } from "./lib/config.ts";
 export type { BunnyConfig, StorageTier } from "./lib/config.ts";
+export type { PullZoneInfo, ReleaseInfo } from "./lib/history.ts";
 
 export type Options = {
   /** The project root, with `bunny.config.ts` and the build. Defaults to the working directory. */
@@ -74,7 +77,6 @@ export async function deploy({
   const api = createBunnyApi();
   const check = {
     commit,
-    base: manifest.astroAdapterBunny.base,
     hasScript: manifest.script !== undefined,
   };
 
@@ -107,6 +109,65 @@ export async function deploy({
     branchUrl: pullZoneUrl(branchTarget),
     ...(liveTarget && { liveUrl: pullZoneUrl(liveTarget) }),
   };
+}
+
+/** The site's releases, newest deploy first, with the pull zones that serve each. */
+export async function releases({ root = process.cwd() }: Options = {}) {
+  const { name } = await loadConfig(root);
+  return (await readSite(createBunnyApi(), name)).releases;
+}
+
+/** Live and the branch pull zones, with the release each points at. */
+export async function status({ root = process.cwd() }: Options = {}) {
+  const { name } = await loadConfig(root);
+  return (await readSite(createBunnyApi(), name)).pullZones;
+}
+
+export type RollbackOptions = Options & {
+  /** The commit of a release that still exists, at least its short hash. */
+  commit: string;
+  /** The branch whose pull zone moves. Without one, live moves. */
+  branch?: string;
+};
+
+/**
+ * Points live, or a branch's pull zone, at an earlier release that still
+ * exists, with the edge rules of that release's commit pull zone, and checks
+ * it. Uploads nothing and moves no hostname. The next deploy of that branch
+ * moves it again.
+ */
+export async function rollback({
+  commit,
+  branch,
+  root = process.cwd(),
+}: RollbackOptions): Promise<{ release: string; url: string }> {
+  const config = await loadConfig(root);
+  const api = createBunnyApi();
+  const name = releaseName(config.name, commit);
+
+  const { releases } = await readSite(api, config.name);
+  const release = releases.find((candidate) => candidate.name === name);
+  if (!release) {
+    throw new Error(
+      `No release ${name}. Releases: ${releases.map(({ name }) => name).join(", ") || "none"}.`,
+    );
+  }
+  const commitPullZone = await findByName<PullZone>(api, "/pullzone", name);
+  if (!commitPullZone) throw new Error(`Release ${name} has no pull zone.`);
+
+  const target = branch ? branchName(config.name, branch) : liveName(config.name);
+  await switchPullZone(
+    api,
+    target,
+    { storageZoneId: release.storageZoneId, scriptId: release.scriptId },
+    await readEdgeRules(api, commitPullZone.Id),
+  );
+  await waitForRelease(pullZoneUrl(target), {
+    commit: release.commit,
+    hasScript: release.scriptId !== undefined,
+  });
+
+  return { release: name, url: pullZoneUrl(target) };
 }
 
 // Fails before anything is made when a secret the build requires has no value.

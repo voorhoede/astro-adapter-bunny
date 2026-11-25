@@ -32,15 +32,27 @@ export function createBunnyApi(
   }
 
   return async (method, path, body) => {
-    const response = await fetch(`${API_URL}${path}`, {
-      method,
-      headers: {
-        AccessKey: apiKey,
-        Accept: "application/json",
-        ...(body !== undefined && { "Content-Type": "application/json" }),
-      },
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
+    const send = () =>
+      fetch(`${API_URL}${path}`, {
+        method,
+        headers: {
+          AccessKey: apiKey,
+          Accept: "application/json",
+          ...(body !== undefined && { "Content-Type": "application/json" }),
+        },
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      });
+
+    // bunny.net answers 429 when a deploy calls it quickly, such as listing right after a switch.
+    let response = await send();
+    for (let attempt = 1; response.status === 429 && attempt <= 5; attempt++) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      await response.body?.cancel();
+      await new Promise((resolve) =>
+        setTimeout(resolve, (retryAfter || attempt) * 1000),
+      );
+      response = await send();
+    }
 
     const text = await response.text();
     const parsed = text ? parseJson(text) : undefined;

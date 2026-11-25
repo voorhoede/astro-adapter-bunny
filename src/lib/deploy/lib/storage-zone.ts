@@ -75,13 +75,31 @@ export async function putFile(
   await withRetries(() => uploadFile(zone, path, Buffer.from(body)));
 }
 
+/** Reads one file, or answers undefined when the zone has none at that path. */
+export async function getFile(
+  zone: StorageZone,
+  path: string,
+): Promise<string | undefined> {
+  const response = await fetch(fileUrl(zone, path), {
+    headers: { AccessKey: zone.Password },
+  });
+  if (response.status === 404) return undefined;
+  if (!response.ok) {
+    throw new Error(`Reading ${path} answered ${response.status}.`);
+  }
+  return response.text();
+}
+
+function fileUrl(zone: StorageZone, path: string): string {
+  return `https://${zone.StorageHostname}/${zone.Name}/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 async function uploadFile(
   zone: StorageZone,
   path: string,
   body: Buffer,
 ): Promise<void> {
-  const url = `https://${zone.StorageHostname}/${zone.Name}/${path.split("/").map(encodeURIComponent).join("/")}`;
-  const response = await fetch(url, {
+  const response = await fetch(fileUrl(zone, path), {
     method: "PUT",
     headers: {
       AccessKey: zone.Password,
