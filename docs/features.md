@@ -66,7 +66,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `build.format: 'preserve'` | ✅ | Like `file`, except index routes, which the pull zone resolves to `index.html`. | Node | no | yes | no |
 | `build.assetsPrefix` | ➖ | | | | | |
 | `astro:env` secrets | ✅ | Script variables. | all | yes | yes | yes |
-| Server islands | ✅ | Needs a fixed `ASTRO_KEY` across releases. | all | yes | yes | yes |
+| Server islands | ✅ | An open page's islands keep running its own release after a deploy, while that release is kept. | all | yes | yes | yes |
 | Actions | ✅ | Form action and JSON call to `/_actions/*`. | all | tested | untested | untested |
 | Sessions | ❌ | No default driver. ⛔ Storage is a weak session store. | Node, Netlify, Cloudflare | Storage driver | none | Storage driver |
 | `routeRules` and `Astro.cache` | ❌ | No cache provider, so no CDN headers. | Vercel, Netlify, Cloudflare | yes | yes | yes |
@@ -88,7 +88,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `logger` config and script logs | 🟡 | Untested: bunny.net shows script logs in its dashboard only, not through the API. | Node, Vercel | | | |
 | Custom `outDir` | ✅ | The script lands in `<outDir>/index.js`, the files in `<outDir>/client`. `build.client` and `build.server` untested. | all | | | |
 | `experimental.redirectPage` (`src/pages/3xx.astro`) | 🟡 | Works when `3xx.astro` sets `prerender = true`. With `output: 'server'` and without it, the build falls back to Astro's own page. | | | | |
-| `security.allowedDomains` | ➖ | The script takes the host from `Host` and ignores `X-Forwarded-Host`. | all | | | |
+| `security.allowedDomains` | ➖ | The script takes the host from `Host` and ignores `X-Forwarded-Host`; between its own releases it trusts forwarded headers only with the site's secret. | all | | | |
 | Image service at runtime (Bunny Optimizer) | ⛔ | Optimizer answered 523 on script-backed pull zones. | Vercel, Netlify, Cloudflare | option, warns | no | option, unusable |
 | Storage regions and replicas | ✅ | The pull zone reads from the storage zone and its replicas. | n/a | `storageHost` | `BUNNY_STORAGE_HOST` | replicas |
 | Rollback | 🟡 | Up to the deploy tool: it switches a pull zone to an earlier release's storage zone and script, then purges. Measured on bunny.net, not built yet. | n/a | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` | `__BUNNY_DEPLOY__` |
@@ -129,7 +129,7 @@ What the adapter declares to Astro through `setAdapter()`, from the [adapter ref
 | `entrypointResolution` | `auto` | ✅ | | all `auto` |
 | `serverEntrypoint` | `astro-adapter-bunny/script.ts` | ✅ | | all |
 | `previewEntrypoint` | `astro-adapter-bunny/preview.ts`, for server output | ✅ | Starts Deno with the built script. | Node, Cloudflare |
-| `client.internalFetchHeaders`, `client.assetQueryParams` | | ❌ | No skew protection: after a deploy, an open page's late assets answer 404 and its server islands and actions run the new release until it reloads. | Vercel opt-in, Netlify automatic |
+| `client.internalFetchHeaders`, `client.assetQueryParams` | `x-bunny-release` and `?dpl=`, the commit's first seven characters, for server output in a git checkout | ✅ | Skew protection: a newer release forwards a tagged request to the commit pull zone of the release that served the page. | Vercel opt-in, Netlify automatic |
 | Custom prerenderer (`setPrerenderer()`) | not set | ➖ | Prerendering runs in Node, which works. | Cloudflare (workerd) |
 | `args`, `exports` | not set | ➖ | Deprecated. | |
 

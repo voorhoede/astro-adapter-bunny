@@ -41,7 +41,6 @@ jobs:
         uses: voorhoede/astro-adapter-bunny/actions/url@main
       - run: npm run build
         env:
-          ASTRO_KEY: ${{ secrets.ASTRO_KEY }}
           SITE: ${{ steps.url.outputs.url }}
       - id: deploy
         uses: voorhoede/astro-adapter-bunny/actions/deploy@main

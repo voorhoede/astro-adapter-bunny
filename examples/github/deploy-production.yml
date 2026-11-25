@@ -3,7 +3,6 @@
 # Copy to .github/workflows/ in the site's repository. It needs:
 # - bunny.config.ts in the project root, with the site's name;
 # - the repository secret BUNNYNET_API_KEY, the API key of the bunny.net account;
-# - the repository secret ASTRO_KEY, from `npx astro create-key`, the same for every build;
 # - every astro:env secret the site uses, as env on the deploy step.
 #
 # Pin the actions to a tag or commit of astro-adapter-bunny instead of main.
@@ -37,8 +36,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-        env:
-          ASTRO_KEY: ${{ secrets.ASTRO_KEY }}
       - id: deploy
         uses: voorhoede/astro-adapter-bunny/actions/deploy@main
         with:

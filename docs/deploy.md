@@ -52,7 +52,7 @@ Several pull zones can point at the same release. Measured on bunny.net on 2026-
 
 ## Release steps
 
-1. **Build** with a fixed `ASTRO_KEY` in the environment. Astro encrypts server island props with a key made per build; without a fixed key, a page cached from one release breaks the islands of the next.
+1. **Build** in a git checkout, or with `BUNNY_COMMIT` or `GITHUB_SHA` set to the commit. The build tags an open page's later requests with the commit, so a newer release can forward them to the release that served the page, and records it in the build manifest, which names the release after it.
 2. **Create the release's storage zone and script** at the same time, since neither needs the other. Set the storage zone's region, tier and replication regions, and its 404 page (see Static sites). Make the script only when `dist/index.js` exists.
 3. **Create the commit pull zone** with the storage zone as its origin and the script as its middleware, its settings and its rules (see below). While it is made:
    - **upload `dist/client`** to the root of the zone, keeping paths, and under the site's `base` when it has one (see below). A new zone can refuse uploads for a few seconds, so retry the first one;
