@@ -39,24 +39,29 @@ A release is one build of one commit, and is not changed once deployed:
 
 - **A storage zone** that holds the release's `dist/client` at its root, named after the site and the commit's short hash.
 - **A middleware Edge Script** with the release's `dist/index.js` and its variables and secrets, named like the zone, only for sites with `dist/index.js`. A script keeps the type it was created with, so it has to be created as a middleware script, not a standalone one.
+- **A commit pull zone**, named like the zone, with the storage zone as its origin and the script as its middleware. It points at its release for as long as the release exists, so the commit's URL never changes.
 
-A pull zone points at one release, by its storage zone and its script:
+The storage zone and the script do not refer to each other; only a pull zone links them. So the commit pull zone can be made only once both exist.
 
-- **A pull zone per branch** that deploys, which serves as that branch's preview.
-- **A live pull zone** that holds the site's custom hostnames, added once by hand.
+Two more kinds of pull zone move between releases, pointing at one by its storage zone and its script:
+
+- **A branch pull zone** per branch that deploys, which serves as that branch's preview and moves to its newest release.
+- **A live pull zone** that holds the site's custom hostnames, added once by hand, and follows the newest release of the production branch.
 
 Several pull zones can point at the same release. Measured on bunny.net on 2026-11-23: one middleware script served two pull zones at once, each from its own storage zone, and the script's `LinkedPullZones` listed both.
 
 ## Release steps
 
 1. **Build** with a fixed `ASTRO_KEY` in the environment. Astro encrypts server island props with a key made per build; without a fixed key, a page cached from one release breaks the islands of the next.
-2. **Create the release's storage zone** with the site's region, tier and replication regions, and set its 404 page (see Static sites). A new zone can refuse uploads for a few seconds, so retry the first one.
-3. **Upload `dist/client`** to the root of the zone, keeping paths, and under the site's `base` when it has one (see below).
-4. **Create the release's script**, when `dist/index.js` exists: set its code, variables and secrets, and publish it.
-5. **Switch the branch's pull zone** to the release (see below), and check it.
+2. **Create the release's storage zone and script** at the same time, since neither needs the other. Set the storage zone's region, tier and replication regions, and its 404 page (see Static sites). Make the script only when `dist/index.js` exists.
+3. **Create the commit pull zone** with the storage zone as its origin and the script as its middleware, its settings and its rules (see below). While it is made:
+   - **upload `dist/client`** to the root of the zone, keeping paths, and under the site's `base` when it has one (see below). A new zone can refuse uploads for a few seconds, so retry the first one;
+   - **set the script's code, variables and secrets**, and publish it.
+4. **Check the commit pull zone.** The branch pull zone switches only when this passes.
+5. **Switch the branch pull zone** to the release (see below), making it on the branch's first deploy, and check it.
 6. **Switch the live pull zone** to the same release, for the production branch, and check it again.
 
-A rollback switches a pull zone to an earlier release that still exists. No file is uploaded and no hostname moves.
+A rollback switches a branch pull zone or live to an earlier release that still exists. No file is uploaded and no hostname moves.
 
 A release's zone starts empty, so no file of an earlier build is left behind. That matters for a site with a script: the script asks storage first for every GET and HEAD, so a leftover file would win over an on-demand route on the same path.
 
