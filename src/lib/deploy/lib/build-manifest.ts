@@ -10,6 +10,8 @@ export type BuildManifest = {
     env?: { name: string; secret: boolean; optional?: boolean }[];
   };
   astroAdapterBunny: {
+    /** The full hash of the commit the build tagged its requests with. */
+    commit?: string;
     trailingSlash: "always" | "never" | "ignore";
     base: string;
     buildFormat: "directory" | "file" | "preserve";

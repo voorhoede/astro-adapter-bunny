@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { readBuildManifest } from "./lib/build-manifest.ts";
 import { createBunnyApi } from "./lib/bunny-api.ts";
 import { waitForRelease } from "./lib/check.ts";
@@ -34,8 +35,8 @@ export async function url(
 }
 
 export type DeployOptions = Options & {
-  /** The full hash of the commit that was built. */
-  commit: string;
+  /** The full hash of the commit that was built. Defaults to the one the build recorded; when both are known they must match. */
+  commit?: string;
   /** The branch the commit was built from. Its pull zone moves to the release. */
   branch: string;
   /** Plain script variables, such as values the site reads through `process.env`. */
@@ -66,7 +67,7 @@ export type DeployResult = {
  * `BUNNYNET_API_KEY`.
  */
 export async function deploy({
-  commit,
+  commit: requested,
   branch,
   variables = {},
   env = process.env,
@@ -76,6 +77,7 @@ export async function deploy({
     loadConfig(root),
     readBuildManifest(root),
   ]);
+  const commit = commitOf(requested, manifest.astroAdapterBunny.commit);
   const secrets = secretsFor(manifest.requires?.env ?? [], env);
   const { rules, warnings } = await rulesForBuild(root, manifest);
   for (const warning of warnings) console.warn(warning);
@@ -91,8 +93,9 @@ export async function deploy({
     manifest,
     commit,
     branch,
-    variables,
-    secrets,
+    // Every release of the site gets its name and the same secret, so one release can forward a request to another and be trusted.
+    variables: { ...variables, BUNNY_SITE: config.name },
+    secrets: { ...secrets, BUNNY_FORWARD_SECRET: forwardSecret(config.name) },
     rules,
   });
   await waitForRelease(release.url, check);
@@ -190,6 +193,32 @@ export async function teardown({
 }: Options & { branch: string }): Promise<{ pullZone?: string; releases: string[] }> {
   const config = await loadConfig(root);
   return teardownBranch(createBunnyApi(), config, branch);
+}
+
+// The build tags an open page's requests with its commit, so the release has to carry the same one.
+function commitOf(requested: string | undefined, built: string | undefined): string {
+  if (requested && built && !built.startsWith(requested.toLowerCase())) {
+    throw new Error(
+      `The build is of commit ${built}, not ${requested}. Deploy the commit that was built.`,
+    );
+  }
+  const commit = built ?? requested;
+  if (!commit) {
+    throw new Error("Pass the commit: the build did not record one.");
+  }
+  return commit;
+}
+
+/**
+ * The secret every script of a site shares, derived from the account's API key
+ * so nobody has to keep it. The key cannot be read back from it. Replacing the
+ * key gives new releases another secret, and older ones then stop trusting
+ * what newer ones forward until they are gone.
+ */
+function forwardSecret(site: string): string {
+  return createHmac("sha256", process.env.BUNNYNET_API_KEY ?? "")
+    .update(site)
+    .digest("hex");
 }
 
 // Fails before anything is made when a secret the build requires has no value.

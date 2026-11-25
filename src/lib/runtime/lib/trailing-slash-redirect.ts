@@ -1,6 +1,6 @@
 import type { BaseApp } from "astro/app";
 import { FetchState, trailingSlash } from "astro/fetch";
-import { toVisitorRequest } from "./bunny-helpers.ts";
+import { isStoredFile, toVisitorRequest } from "./bunny-helpers.ts";
 import { withRenderedCacheControl } from "./cache-control.ts";
 
 /**
@@ -14,7 +14,7 @@ export function trailingSlashRedirect(
   const request = toVisitorRequest(originRequest);
 
   // Astro skips only paths with an extension, so a stored file without one, such as /CNAME, would redirect to a path that does not exist.
-  if (app.manifest.assets.has(new URL(request.url).pathname)) {
+  if (isStoredFile(app, new URL(request.url).pathname)) {
     return undefined;
   }
 
