@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-28, rewritten 2026-11-15 and 2026-11-17
+date: 2026-10-28, rewritten 2026-11-15, 2026-11-17 and 2026-11-25
 ---
 
 # Redirects and headers files for edge rules
@@ -9,7 +9,9 @@ date: 2026-10-28, rewritten 2026-11-15 and 2026-11-17
 
 Cloudflare and Netlify read `public/_headers` and `public/_redirects` to add headers to stored files and redirect paths without code. bunny.net's documentation does not mention either file (searched on 2026-10-28), so a pull zone serves them as ordinary files. No third-party parser follows Cloudflare's semantics (checked `@astrojs/underscore-redirects`, `@cloudflare/pages-shared`, `@cloudflare/workers-shared`, `netlify-redirect-parser` and `netlify-headers-parser` on 2026-10-28).
 
-By default Astro writes a redirect from its `redirects` config to a prerendered page as an HTML page with a meta refresh, which answers 200. The official Node, Vercel and Cloudflare adapters set `build.redirects: false` and answer a real 301 or 308: Node from its server, Netlify and Cloudflare through a `_redirects` file for their platform, Vercel through its route config. `build.redirects: false` only drops redirect routes; i18n fallbacks still get their meta refresh page. `@astrojs/underscore-redirects`, which Netlify and Cloudflare use, writes a dynamic redirect as a rewrite to the target's HTML file or to a function, not as a redirect between two patterns.
+By default Astro writes a redirect from its `redirects` config to a prerendered page as an HTML page with a meta refresh, which answers 200. The official Node, Vercel and Cloudflare adapters set `build.redirects: false` and answer a real 301 or 308: Node from its server, Netlify and Cloudflare through a `_redirects` file for their platform, Vercel through its route config. `build.redirects: false` only drops redirect routes; i18n fallbacks still get their meta refresh page. `@astrojs/underscore-redirects`, which Netlify and Cloudflare use, does not write what Astro answers. Version 1.0.4, run on the test app with five more redirects on 2026-11-25, sent a dynamic redirect to the target's HTML file (`/blog/:slug/index.html`), kept `*` in a target where hosts substitute `:splat`, turned `/post-[id]` into `/post-`, sent a redirect whose target is no route to its own source, and kept a configured status where Astro answers 301.
+
+Astro's own redirect keeps a configured status only when the target is a route, and answers 301, or 308 for other methods, otherwise. It fills the source's params into a string target, leaves an object's `destination` as written, and adds a trailing slash to a route target for `trailingSlash: 'always'` (read in Astro 7.4's `resolveRedirectTarget` and `computeRedirectStatus`, which it does not export).
 
 bunny.net has edge rules with a "Redirect to URL" action. Measured on 2026-11-15 on a pull zone with a middleware script:
 
@@ -30,14 +32,15 @@ With `security.csp`, Astro puts each prerendered page's policy in a `<meta>` tag
 
 ## Decision outcome
 
-The third, for redirects and for the policies of prerendered pages. The adapter sets `build.redirects: false` and writes Astro's `redirects` to `dist/client/_redirects`, one line per redirect: source, target and status, with `:param` for a dynamic segment and `*` and `:splat` for a rest segment. The script renders a redirect route itself, so a site with a script answers a real 301 or 308 without any edge rule. A deploy tool turns the file into edge rules, which a static site needs and a site with a script may use to answer before the script.
+The third, for redirects and for the policies of prerendered pages. The adapter sets `build.redirects: false` and writes Astro's `redirects` to `dist/client/_redirects`, one line per redirect: source, target and status as Astro's own redirect answers a GET, with `:param` for a dynamic segment and `*` and `:splat` for a rest segment. The script renders a redirect route itself, so a site with a script answers a real 301 or 308 without any edge rule. A deploy tool turns the file into edge rules, which a static site needs and a site with a script may use to answer before the script.
 
 The adapter declares `staticHeaders` and writes each prerendered page's Content-Security-Policy to `dist/client/_headers`, one block per page; other headers Astro saw while prerendering, such as an i18n fallback's `Location`, are left out. Both files are appended to the site's own `public/_redirects` and `public/_headers`, whose lines stay first. The adapter does not parse the site's lines. A header on rendered pages goes in Astro middleware.
 
 ### Consequences
 
 - Good: redirects answer 301 or 308, as with the official adapters, and dynamic redirects work.
-- Good: a deploy tool gets the redirects in the format Netlify and Cloudflare use.
+- Good: a deploy tool gets the redirects in the format Netlify and Cloudflare use, and an edge rule made from a line answers what the script answers for the same path.
+- Bad: the file follows rules Astro does not export, so a change in Astro's redirects has to be copied by hand.
 - Bad: a static site depends on its deploy tool for redirects; without edge rules they answer 404.
 - Bad: an edge rule answers 301 where Astro answers 308 for a POST, and holds a parameter only as a whole path segment.
 - Good: a prerendered page gets its policy as a header, so the directives the CSP specification ignores in a `<meta>` tag, such as `frame-ancestors`, are not lost.
