@@ -87,3 +87,10 @@ Some behavior only shows on bunny.net: CDN caching, purges, startup and size lim
 - Delete what you created, checking the name before every delete, and list the account afterwards to confirm nothing with the prefix is left.
 - Keep keys in `.env`, which is ignored by git. Never print them or commit them.
 - Write what you measured into the ADR it decides, with the date and the conditions.
+
+## Releasing
+
+1. Move the entries under `[Unreleased]` in [`changelog.md`](changelog.md) to a heading with the new version and the date, and set the same version in `package.json`.
+2. Merge that to `main`, then push a tag with the version, such as `git tag v0.2.0 && git push origin v0.2.0`.
+
+The [release workflow](.github/workflows/release.yml) checks the tag against `package.json` and publishes to npm with trusted publishing, which adds provenance. The tag also releases the actions in `actions/`, which share it.
