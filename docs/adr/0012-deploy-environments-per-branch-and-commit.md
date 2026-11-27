@@ -74,7 +74,7 @@ For the choices that are not about the build, such as storage region, tier and r
 - Bad: a site needs a pull zone per kept release, plus one per branch and one for live, against 500 per account by default, and every one of them needs the pull zone settings and the edge rules for redirects and headers.
 - Bad: a deploy waits for a new pull zone, which served its first file after about 5 s.
 - Bad: a zone's name stays taken for at least 10 minutes after it is deleted, so redeploying a commit whose release was just deleted fails until bunny.net releases the name.
-- Good: a page that is open after a switch keeps its own release's assets, server islands and actions, through that release's commit pull zone, for as long as the release is kept.
+- Bad: after a switch, a page that is open answers 404 for late assets of its own release, and its server islands and actions run the new release, until the visitor reloads.
 
 ### Confirmation
 

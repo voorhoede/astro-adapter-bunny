@@ -3,26 +3,6 @@ import type { BaseApp } from "astro/app";
 import { withStoredCacheControl } from "./cache-control.ts";
 import { withContentType } from "./content-type.ts";
 
-declare const process: { env: Record<string, string | undefined> };
-
-/** Headers one release sends to another when it forwards a visitor's request. */
-export const FORWARD = {
-  secret: "x-bunny-forward-secret",
-  host: "x-bunny-forwarded-host",
-  proto: "x-bunny-forwarded-proto",
-  address: "x-bunny-forwarded-for",
-} as const;
-
-/**
- * Whether another release of this site forwarded the request: it carries the
- * secret the deploy sets on every script of the site. Only then are the
- * forwarded host, protocol and address the visitor's.
- */
-export function isForwarded(originRequest: Request): boolean {
-  const secret = process.env.BUNNY_FORWARD_SECRET;
-  return !!secret && originRequest.headers.get(FORWARD.secret) === secret;
-}
-
 /**
  * Extracts the client IP address from the `x-real-ip` header.
  */
@@ -47,38 +27,21 @@ export function toVisitorRequest(originRequest: Request): Request {
   return visitorRequest;
 }
 
-/** Puts back a visitor request whose body was sent to another release that did not answer. */
-export function replaceVisitorRequest(
-  originRequest: Request,
-  visitorRequest: Request,
-): void {
-  visitorRequests.set(originRequest, visitorRequest);
-}
-
 function buildVisitorRequest(request: Request): Request {
   const url = new URL(request.url);
-  const forwarded = isForwarded(request);
-  const header = (name: string) =>
-    request.headers.get(name)?.split(",")[0]?.trim();
 
-  const protocol = forwarded
-    ? header(FORWARD.proto)
-    : header("x-forwarded-proto");
+  const protocol = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
   if (protocol) url.protocol = protocol;
 
   url.port = "";
 
-  const host = forwarded ? header(FORWARD.host) : header("host");
+  const host = request.headers.get("host");
   if (host) url.host = host;
 
-  const visitorRequest = new Request(url, request);
-  const address = forwarded && header(FORWARD.address);
-  if (address) visitorRequest.headers.set("x-real-ip", address);
-  // A forwarded request never shows the secret or the forwarding headers to the site's code.
-  for (const name of [FORWARD.secret, FORWARD.host, FORWARD.proto, FORWARD.address]) {
-    visitorRequest.headers.delete(name);
-  }
-  return visitorRequest;
+  return new Request(url, request);
 }
 
 /**
@@ -130,20 +93,6 @@ export function fromStorageResponse(
   );
 }
 
-let assetPaths: Set<string> | undefined;
-
-/**
- * Whether the build stored a file at this path. Astro appends the release's
- * `?dpl=` to every path in `manifest.assets`, so the paths are compared
- * without it.
- */
-export function isStoredFile(app: BaseApp, pathname: string): boolean {
-  assetPaths ??= new Set(
-    [...app.manifest.assets].map((path) => path.split("?")[0]!),
-  );
-  return assetPaths.has(pathname);
-}
-
 /**
  * Whether storage holds this path: a public file, an asset or a prerendered
  * page. A redirect route and an on-demand route on the same path are rendered.
@@ -154,7 +103,7 @@ export function isStoredPath(originRequest: Request, app: BaseApp): boolean {
 
   const route = app.match(request, true);
   return (
-    isStoredFile(app, new URL(request.url).pathname) ||
+    app.manifest.assets.has(new URL(request.url).pathname) ||
     (route?.prerender === true && route.type !== "redirect")
   );
 }

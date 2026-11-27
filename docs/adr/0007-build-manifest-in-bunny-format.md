@@ -15,7 +15,7 @@ A script that serves releases from folders has to strip the folder from every pa
 
 Measured on bunny.net: 128 variables per script (129 breaks startup) and 2 KB per value at runtime; the API refuses values over 4,096 characters, and about 242 to 254 KB of values in total answers 431 (October 2026). A full zone purge took effect within 30 s (2026-11-03).
 
-Astro encrypts the props of a server island with a key made per build. On 2026-11-09 a page cached from one build sent props a script from another build could not read, and the island answered 400.
+Astro encrypts the props of a server island with a key made per build. On 2026-11-09 a page cached from one build sent props a script from another build could not read, and the island answered 400. A fixed `ASTRO_KEY` in the build environment keeps the key across builds.
 
 ## Considered options
 

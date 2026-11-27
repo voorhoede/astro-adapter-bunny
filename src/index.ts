@@ -1,11 +1,9 @@
-import { fileURLToPath } from "node:url";
 import type {
   AstroConfig,
   AstroIntegration,
   IntegrationResolvedRoute,
 } from "astro";
 import { adapter, serverBuildConfig } from "./lib/build/lib/adapter.ts";
-import { buildCommit } from "./lib/build/lib/build-commit.ts";
 import {
   type ImageServiceOption,
   resolveImageService,
@@ -27,7 +25,6 @@ export default function bunny({
   let hasServer = false;
   let routes: IntegrationResolvedRoute[] = [];
   let headers = "";
-  let commit: string | undefined;
 
   return {
     name: "astro-adapter-bunny",
@@ -50,9 +47,8 @@ export default function bunny({
         buildOutput,
       }) => {
         config = resolvedConfig;
-        commit = buildCommit(fileURLToPath(resolvedConfig.root));
 
-        setAdapter(adapter(buildOutput, commit));
+        setAdapter(adapter(buildOutput));
       },
       "astro:routes:resolved": ({ routes: resolvedRoutes }) => {
         routes = resolvedRoutes;
@@ -73,7 +69,7 @@ export default function bunny({
           await writeScript(config, logger);
         }
 
-        await writeBuildManifest(config, { hasServer, commit, ...staticFiles });
+        await writeBuildManifest(config, { hasServer, ...staticFiles });
       },
     },
   };

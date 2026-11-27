@@ -1,19 +1,9 @@
 import type { AstroAdapter } from "astro";
 
-/** The header Astro sends with server island, action and prefetch requests, naming the release that served the page. */
-export const RELEASE_HEADER = "x-bunny-release";
-
 /**
- * What the adapter declares to Astro. A site with a script tags the requests
- * an open page makes later with its release, so a newer release can send them
- * on to the release that served the page.
+ * What the adapter declares to Astro.
  */
-export function adapter(
-  buildOutput: "static" | "server",
-  commit?: string,
-): AstroAdapter {
-  const release = commit?.slice(0, 7);
-
+export function adapter(buildOutput: "static" | "server"): AstroAdapter {
   return {
     name: "astro-adapter-bunny",
     entrypointResolution: "auto",
@@ -22,13 +12,6 @@ export function adapter(
     ...(buildOutput === "server" && {
       previewEntrypoint: "astro-adapter-bunny/preview.js",
     }),
-    ...(buildOutput === "server" &&
-      release && {
-        client: {
-          internalFetchHeaders: { [RELEASE_HEADER]: release },
-          assetQueryParams: new URLSearchParams({ dpl: release }),
-        },
-      }),
     adapterFeatures: {
       buildOutput,
       preserveBuildClientDir: true,

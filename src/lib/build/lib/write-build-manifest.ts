@@ -12,13 +12,7 @@ export async function writeBuildManifest(
     hasServer,
     hasRedirects,
     hasHeaders,
-    commit,
-  }: {
-    hasServer: boolean;
-    hasRedirects: boolean;
-    hasHeaders: boolean;
-    commit: string | undefined;
-  },
+  }: { hasServer: boolean; hasRedirects: boolean; hasHeaders: boolean },
 ): Promise<void> {
   const root = fileURLToPath(config.root);
   const outDir = fileURLToPath(config.outDir);
@@ -64,7 +58,6 @@ export async function writeBuildManifest(
       dev: { command: "astro dev" },
     }),
     astroAdapterBunny: {
-      ...(commit && { commit }),
       trailingSlash: config.trailingSlash,
       base: config.base,
       buildFormat: config.build.format,
