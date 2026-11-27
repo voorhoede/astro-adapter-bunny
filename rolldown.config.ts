@@ -11,7 +11,6 @@ import { defineConfig } from "rolldown";
 export default defineConfig({
   input: {
     index: "src/index.ts",
-    deploy: "src/lib/deploy/deploy.ts",
     script: "src/lib/runtime/script.ts",
     preview: "src/lib/preview/preview.ts",
     "run-script": "src/lib/preview/run-script.ts",

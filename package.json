@@ -18,10 +18,6 @@
       "types": "./dist/types/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./deploy": {
-      "types": "./dist/types/lib/deploy/deploy.d.ts",
-      "default": "./dist/deploy.js"
-    },
     "./script.js": "./dist/script.js",
     "./preview.js": "./dist/preview.js"
   },
