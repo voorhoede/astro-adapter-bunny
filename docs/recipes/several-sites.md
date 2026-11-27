@@ -57,19 +57,19 @@ jobs:
       - run: npm ci
       - run: npm run build -w sites/${{ matrix.site }}
       - id: deploy
-        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.1.0
+        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           site: ${{ matrix.site }}
           working_directory: sites/${{ matrix.site }}
           secrets: |
             API_TOKEN=${{ secrets.API_TOKEN }}
-      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.2.0
         with:
           release: ${{ steps.deploy.outputs.release }}
           environment: ${{ matrix.environment }} ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
           url: ${{ steps.deploy.outputs.branch_url }}
-      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           site: ${{ matrix.site }}
@@ -93,7 +93,7 @@ jobs:
           - { site: shop, environment: Shop }
           - { site: blog, environment: Blog }
     steps:
-      - uses: voorhoede/astro-adapter-bunny/actions/teardown@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/teardown@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           site: ${{ matrix.site }}
@@ -116,11 +116,11 @@ Sometimes one branch is built twice, such as a production build and a build for 
     steps:
       # ...check out, install and build with the variables the editors build needs
       - id: deploy
-        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.1.0
+        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           site: ${{ env.BUNNY_SITE }}
-      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.2.0
         with:
           release: ${{ steps.deploy.outputs.release }}
           environment: ${{ env.ENVIRONMENT }}

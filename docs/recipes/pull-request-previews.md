@@ -47,18 +47,18 @@ jobs:
       - run: npm ci
       - run: npm run build
       - id: deploy
-        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.1.0
+        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           secrets: |
             API_TOKEN=${{ secrets.API_TOKEN }}
-      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.2.0
         with:
           release: ${{ steps.deploy.outputs.release }}
           environment: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
           url: ${{ steps.deploy.outputs.branch_url }}
       # main keeps five releases to roll back to; a pull request only needs the one it shows.
-      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           environment: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
@@ -93,7 +93,7 @@ jobs:
       group: deploy-${{ github.head_ref }}
       cancel-in-progress: false
     steps:
-      - uses: voorhoede/astro-adapter-bunny/actions/teardown@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/teardown@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           environment: Pull Request

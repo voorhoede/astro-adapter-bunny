@@ -38,18 +38,18 @@ jobs:
       - run: npm ci
       - run: npm run build
       - id: deploy
-        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.1.0
+        uses: voorhoede/astro-adapter-bunny/actions/deploy@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           # The astro:env secrets the site reads at runtime; the deploy stops when a required one is missing.
           secrets: |
             API_TOKEN=${{ secrets.API_TOKEN }}
-      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.2.0
         with:
           release: ${{ steps.deploy.outputs.release }}
           environment: Production
           url: ${{ steps.deploy.outputs.branch_url }}
-      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           environment: Production
@@ -93,7 +93,7 @@ jobs:
       # For bunny.config.ts only; without it the pull zone keeps its settings.
       - uses: actions/checkout@v7
       - id: rollback
-        uses: voorhoede/astro-adapter-bunny/actions/rollback@v0.1.0
+        uses: voorhoede/astro-adapter-bunny/actions/rollback@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           environment: Production
@@ -124,7 +124,7 @@ jobs:
   clean-up-orphans:
     runs-on: ubuntu-latest
     steps:
-      - uses: voorhoede/astro-adapter-bunny/actions/clean-up-orphans@v0.1.0
+      - uses: voorhoede/astro-adapter-bunny/actions/clean-up-orphans@v0.2.0
         with:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
 ```

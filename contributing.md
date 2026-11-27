@@ -91,8 +91,9 @@ Some behavior only shows on bunny.net: CDN caching, purges, startup and size lim
 ## Releasing
 
 1. Move the entries under `[Unreleased]` in [`changelog.md`](changelog.md) to a heading with the new version and the date, and set the same version in `package.json`.
-2. Merge that to `main`, then push a tag with the version, such as `git tag v0.2.0 && git push origin v0.2.0`.
+2. Merge that to `main`, then push a tag with the version, such as `git tag -m "v0.2.0" v0.2.0 && git push origin v0.2.0`.
+3. Approve the staged version on npmjs.com, under the package's Staged Packages, or with `npm stage approve <id>`. Approving asks for 2FA.
 
-The [release workflow](.github/workflows/release.yml) checks the tag against `package.json` and publishes to npm with trusted publishing, which adds provenance. A version npm already has, such as `0.1.0`, which was published by hand, is not published again. The tag also releases the actions in `actions/`, which share it.
+The [release workflow](.github/workflows/release.yml) checks the tag against `package.json` and stages the version on npm with trusted publishing, which adds provenance; it is public once a maintainer approves it. A version npm already has, such as `0.1.0`, which was published by hand, is not published again. The tag also releases the actions in `actions/`, which share it.
 
 Trusted publishing needs a trusted publisher in the package's settings on npmjs.com: GitHub Actions, `voorhoede/astro-adapter-bunny`, workflow `release.yml`, no environment. A new one expires when it has not published within 2 days, so add it shortly before the release that first uses it.
