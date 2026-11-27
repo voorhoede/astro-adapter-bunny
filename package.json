@@ -1,6 +1,6 @@
 {
   "name": "astro-adapter-bunny",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Astro adapter for bunny.net Edge Scripting.",
   "license": "ISC",
   "author": "De Voorhoede",
