@@ -1,0 +1,18 @@
+name: Create a GitHub deployment
+author: Voorhoede
+description: Records a deploy in the repository's Deployments, and marks the branch's earlier ones inactive
+
+inputs:
+  environment:
+    description: The GitHub environment, such as "Site Production"
+    required: true
+  url:
+    description: The URL the deployment links to, such as the deploy action's branch_url
+    required: true
+  github_token:
+    description: Creates the deployment
+    default: ${{ github.token }}
+
+runs:
+  using: "node24"
+  main: "dist/index.js"
