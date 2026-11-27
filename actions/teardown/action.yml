@@ -1,0 +1,18 @@
+name: Tear down a bunny.net branch
+author: Voorhoede
+description: Removes a branch's pull zone, its releases and their deployments, such as after a pull request closes
+
+inputs:
+  bunny_api_key:
+    description: The API key of the bunny.net account
+    required: true
+  environment:
+    description: The GitHub environment the branch deployed to, such as "Site Pull Request"
+    required: true
+  github_token:
+    description: Reads and deletes the environment's deployments
+    default: ${{ github.token }}
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

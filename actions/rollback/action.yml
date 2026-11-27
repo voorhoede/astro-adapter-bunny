@@ -1,0 +1,27 @@
+name: Roll back a bunny.net branch
+author: Voorhoede
+description: Points the branch's pull zone at an earlier release that still exists, and records it as a deployment
+
+inputs:
+  bunny_api_key:
+    description: The API key of the bunny.net account
+    required: true
+  environment:
+    description: The GitHub environment the branch deploys to, such as "Site Production"
+    required: true
+  commit:
+    description: The commit to go back to, short or full; empty for the release before the current one
+    default: ""
+  github_token:
+    description: Reads and creates the environment's deployments
+    default: ${{ github.token }}
+
+outputs:
+  url:
+    description: The branch's URL
+  commit:
+    description: The commit the branch serves now
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

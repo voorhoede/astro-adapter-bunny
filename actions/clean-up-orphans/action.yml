@@ -1,0 +1,21 @@
+name: Clean up orphaned bunny.net releases
+author: Voorhoede
+description: Deletes releases on bunny.net that no GitHub deployment refers to
+
+inputs:
+  bunny_api_key:
+    description: The API key of the bunny.net account
+    required: true
+  min_age_hours:
+    description: Only releases older than this; a running deploy has not created its deployment yet
+    default: "1"
+  dry_run:
+    description: List what would be deleted without deleting it
+    default: "false"
+  github_token:
+    description: Reads the repository's deployments
+    default: ${{ github.token }}
+
+runs:
+  using: "node24"
+  main: "dist/index.js"
