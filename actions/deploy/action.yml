@@ -1,0 +1,34 @@
+name: Deploy to bunny.net
+author: Voorhoede
+description: Makes a release of an astro-adapter-bunny build, checks it on the commit's URL, then moves the branch's pull zone to it
+
+inputs:
+  bunny_api_key:
+    description: The API key of the bunny.net account
+    required: true
+  site:
+    description: The site's name in every resource name, before the owner; defaults to the repository's name. A second build of the same commits, such as a preview, needs its own.
+    default: ""
+  working_directory:
+    description: The site's folder, with its build and bunny.config.ts; defaults to the repository's root
+    default: "."
+  secrets:
+    description: Script secrets, one NAME=value per line
+    default: ""
+  variables:
+    description: Script variables, one NAME=value per line
+    default: ""
+
+outputs:
+  commit_url:
+    description: The commit's URL, which keeps answering with this release
+  branch_url:
+    description: The branch's URL, which moves to the branch's newest release
+
+runs:
+  using: "node24"
+  main: "dist/index.js"
+
+branding:
+  color: orange
+  icon: upload-cloud

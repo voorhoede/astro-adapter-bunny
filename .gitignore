@@ -4,3 +4,8 @@ dist
 .bunny
 .astro
 test/live/.work
+# GitHub runs an action from its committed bundle.
+!actions/*/dist/
+
+# State of local action runs (actions/try).
+.try

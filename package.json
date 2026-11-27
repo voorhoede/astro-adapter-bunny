@@ -18,6 +18,10 @@
       "types": "./dist/types/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./config": {
+      "types": "./dist/types/lib/config/config.d.ts",
+      "default": "./dist/config.js"
+    },
     "./script.js": "./dist/script.js",
     "./preview.js": "./dist/preview.js"
   },
@@ -47,5 +51,8 @@
   },
   "engines": {
     "node": ">=24"
-  }
+  },
+  "workspaces": [
+    "actions"
+  ]
 }

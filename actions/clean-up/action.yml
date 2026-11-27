@@ -1,0 +1,24 @@
+name: Clean up bunny.net releases
+author: Voorhoede
+description: Deletes a branch's older releases and their deployments, keeping the newest
+
+inputs:
+  bunny_api_key:
+    description: The API key of the bunny.net account
+    required: true
+  site:
+    description: The site's name in every resource name, before the owner; defaults to the repository's name. A second build of the same commits, such as a preview, needs its own.
+    default: ""
+  environment:
+    description: The GitHub environment the branch deploys to, such as "Site Production"
+    required: true
+  releases_to_keep:
+    description: How many of the branch's newest releases stay; older ones are deleted, unless a pull zone still serves them
+    default: "3"
+  github_token:
+    description: Reads and deletes the environment's deployments
+    default: ${{ github.token }}
+
+runs:
+  using: "node24"
+  main: "dist/index.js"

@@ -11,6 +11,7 @@ import { defineConfig } from "rolldown";
 export default defineConfig({
   input: {
     index: "src/index.ts",
+    config: "src/lib/config/config.ts",
     script: "src/lib/runtime/script.ts",
     preview: "src/lib/preview/preview.ts",
     "run-script": "src/lib/preview/run-script.ts",

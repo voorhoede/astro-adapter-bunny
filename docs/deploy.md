@@ -181,12 +181,14 @@ With `security.csp`, the adapter writes no `<meta>` policy into prerendered page
 
 Only the policy is listed: other headers Astro saw while prerendering, such as an i18n fallback's `Location`, are not. On-demand pages send their own policy.
 
-Translate the file into edge rules with the action "Set response header", one group per header name:
+Translate the file into edge rules with the action "Set response header", one group per header name. Every rule has the trigger "the response header is missing" (trigger "Response header", match none of `*`), which keeps a header a route sets itself:
 
-- **The most common value** goes in one rule with two triggers, both required: the response header is missing (trigger "Response header", match none of `*`), and the URL matches none of the paths that have another value.
-- **Every other value** gets its own rule: the response header is missing, and the URL matches one of its paths. Use the same anchored pattern as for redirects.
+- **One value for every URL**: the value of `/*` when the file has that path, else the most common value. Its rule has no other trigger.
+- **Every other value** gets a rule per wildcard path and a rule per 5 exact paths, with a URL trigger for those paths. Use the same anchored pattern as for redirects.
 
-A trigger takes 5 patterns, so split a longer exception list over more triggers. The "response header is missing" trigger keeps a header a route sets itself.
+Where two rules set the same header on one URL, the rule with the higher `OrderIndex` wins, whatever order they were made in, and the "missing" trigger looks at the response from the origin, not at a header an earlier rule set. So give the rules an `OrderIndex` from general to specific: the values for every URL, then the wildcard paths, shortest first, then the exact paths. A list of exceptions instead does not scale: a rule takes 5 triggers of 5 patterns, so about 20 paths with another value already break it.
+
+Measured on bunny.net on 2026-11-27: two rules on one URL, created in both orders and with both `OrderIndex` values; and a build whose `_headers` has `/*` with a `frame-ancestors` policy and 21 pages with their own: every page got its own policy, every other file `frame-ancestors`, and an on-demand page kept its own. On a pull zone created moments before, the rules and the script answered about 20 seconds after the release file did.
 
 Measured on bunny.net on 2026-11-17 with `security.csp`: the edge rules made from the file set each prerendered page's own policy, two pages with different policies each got theirs, an on-demand page kept its own, and no prerendered page carried a `<meta>` policy.
 
