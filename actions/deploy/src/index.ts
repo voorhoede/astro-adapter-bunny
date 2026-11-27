@@ -1,4 +1,4 @@
-import { getMultilineInput, info, setFailed, setOutput, setSecret } from "@actions/core";
+import { getInput, getMultilineInput, info, setFailed, setOutput, setSecret } from "@actions/core";
 import { existsSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { configurePullZone, createPullZone, getPullZone } from "../../shared/bunny/pull-zone.ts";
@@ -8,14 +8,17 @@ import { branchName, branchPullZoneName, commitSha, pullZoneUrl, releaseName } f
 import { uploadReleaseFile } from "../../shared/releases/release-file.ts";
 import { switchPullZone } from "../../shared/releases/switch-pull-zone.ts";
 import { waitForRelease } from "../../shared/releases/wait-for-release.ts";
+import { loadConfig } from "../../shared/config.ts";
 import { buildEdgeRules } from "./build-edge-rules.ts";
 import { checkSecrets } from "./check-secrets.ts";
-import { loadConfig } from "./config.ts";
 import { readManifest } from "./manifest.ts";
 import { parseLines } from "./parse-lines.ts";
 import { listFiles, uploadFiles } from "./upload-files.ts";
 
 try {
+  // The site's folder, with its build and bunny.config.ts, such as one site of several in a repository.
+  process.chdir(getInput("working_directory") || ".");
+
   const manifest = readManifest();
   const secrets = parseLines(getMultilineInput("secrets"));
   const variables = parseLines(getMultilineInput("variables"));
@@ -67,7 +70,14 @@ try {
         pullZone = await createPullZone({ name, storageZoneId: storageZone.Id });
       }
       // Always, also for a pull zone an earlier run made: that run may have stopped before this step.
-      await configurePullZone({ id: pullZone.Id, name, storageZoneId: storageZone.Id, scriptId: script?.Id, rules });
+      await configurePullZone({
+        id: pullZone.Id,
+        name,
+        storageZoneId: storageZone.Id,
+        scriptId: script?.Id,
+        rules,
+        settings: config.pullZone,
+      });
     })(),
     (async () => {
       const { base } = manifest.astroAdapterBunny;
@@ -97,17 +107,18 @@ try {
 
   // 3. The release answers on its own URL before the visitors of its branch get it.
   const commitUrl = pullZoneUrl(name);
-  await waitForRelease({ url: commitUrl, sha, hasScript });
+  await waitForRelease({ url: commitUrl, sha });
   info(`Commit URL: ${commitUrl.href}`);
   setOutput("commit_url", commitUrl.href);
 
-  // 4. Then the branch's pull zone moves to it.
+  // 4. Then the branch's pull zone moves to it, and goes back when it does not answer with it.
   const branchUrl = await switchPullZone({
     name: branchPullZoneName(branchName()),
     sha,
     storageZoneId: storageZone.Id,
     scriptId: script?.Id,
     rules,
+    settings: config.pullZone,
   });
   info(`Branch URL: ${branchUrl.href}`);
   setOutput("branch_url", branchUrl.href);

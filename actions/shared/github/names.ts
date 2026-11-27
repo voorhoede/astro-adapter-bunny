@@ -1,3 +1,4 @@
+import { getInput } from "@actions/core";
 import { context } from "@actions/github";
 import { createHash } from "node:crypto";
 
@@ -14,12 +15,13 @@ const MAX_NAME = 60;
 const RELEASE_PREFIX = 8;
 
 /**
- * The site, named after the repository and its owner, such as
- * astro-adapter-bunny-voorhoede. Every resource of it ends with this, after
- * the commit or the branch it is for.
+ * The site and its owner, such as astro-adapter-bunny-voorhoede. The site is
+ * the `site` input, or the repository's name; the owner always follows, so two
+ * owners never share names. Every resource of it ends with this, after the
+ * commit or the branch it is for.
  */
 export const siteName = () => {
-  const site = `${sanitizeName(context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
+  const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
   if (site.length > MAX_NAME - RELEASE_PREFIX) {
     throw new Error(`The site name ${site} is longer than ${MAX_NAME - RELEASE_PREFIX} characters, which leaves no room for a commit.`);
   }

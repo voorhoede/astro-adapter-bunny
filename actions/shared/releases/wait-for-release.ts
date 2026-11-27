@@ -2,11 +2,12 @@ import { RELEASE_FILE } from "./release-file.ts";
 
 /**
  * Waits until a pull zone answers with a release: its release file names the
- * commit, and for a site with a script, `/` answers anything but a server
- * error. A new pull zone served its first file after about 5 s, and a
- * switched one answered with the new release 2 to 7 s after the switch.
+ * commit. The file is uploaded last and is not a page of the site, so this
+ * tells whether the release is live on the URL, not whether the site works. A
+ * new pull zone served its first file after about 5 s, and a switched one
+ * answered with the new release 2 to 7 s after the switch.
  */
-export const waitForRelease = async ({ url, sha, hasScript }: { url: URL; sha: string; hasScript: boolean }) => {
+export const waitForRelease = async ({ url, sha }: { url: URL; sha: string }) => {
   const deadline = Date.now() + 120_000;
 
   await poll({ url: new URL(RELEASE_FILE, url), deadline }, async (response) => {
@@ -19,15 +20,6 @@ export const waitForRelease = async ({ url, sha, hasScript }: { url: URL; sha: s
     }
     return true;
   });
-
-  if (hasScript) {
-    await poll({ url, deadline }, async (response) => {
-      if (response.status >= 500) {
-        return `answered ${response.status}`;
-      }
-      return true;
-    });
-  }
 };
 
 const poll = async (

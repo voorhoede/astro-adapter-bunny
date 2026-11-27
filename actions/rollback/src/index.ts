@@ -7,8 +7,12 @@ import { getStorageZone } from "../../shared/bunny/storage-zone.ts";
 import { createDeployment, deployedReleases, isProductionBranch } from "../../shared/github/deployments.ts";
 import { branchName, branchPullZoneName, releaseName } from "../../shared/github/names.ts";
 import { switchPullZone } from "../../shared/releases/switch-pull-zone.ts";
+import { loadConfig } from "../../shared/config.ts";
 
 try {
+  // The site's folder, with its bunny.config.ts; without one, the pull zone keeps its settings.
+  process.chdir(getInput("working_directory") || ".");
+
   const environment = getInput("environment", { required: true });
   const branch = branchName();
   const sha = await targetCommit({ environment, branch, input: getInput("commit") });
@@ -26,6 +30,7 @@ try {
   }
   const rules = await readEdgeRules({ pullZoneId: commitPullZone.Id });
   const script = await getScript({ name });
+  const config = await loadConfig();
 
   const url = await switchPullZone({
     name: branchPullZoneName(branch),
@@ -33,6 +38,7 @@ try {
     storageZoneId: storageZone.Id,
     scriptId: script?.Id,
     rules,
+    settings: config.pullZone,
   });
 
   // The action records it itself, so the deployment has the commit that runs, not the newest on the branch.

@@ -7,7 +7,7 @@ Builds an Astro site for bunny.net and deploys every commit of it, so each commi
 ### On bunny.net
 
 **Site**:
-One Astro project deployed to bunny.net; its name starts the name of every resource it has there.
+One Astro project deployed to bunny.net, named after its repository unless set; with the repository's owner, its name ends the name of every resource it has there. A second build of the same commits, such as a preview, is a site of its own.
 _Avoid_: project, app
 
 **Release**:

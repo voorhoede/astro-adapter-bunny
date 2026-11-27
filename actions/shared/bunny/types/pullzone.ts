@@ -21,6 +21,16 @@ export type PullZoneUpdate = {
   IgnoreQueryStrings?: boolean;
   DisableCookies?: boolean;
   EnableCacheSlice?: boolean;
+
+  // Settings a site chooses in bunny.config.ts
+  EnableGeoZoneEU?: boolean;
+  EnableGeoZoneUS?: boolean;
+  EnableGeoZoneASIA?: boolean;
+  EnableGeoZoneSA?: boolean;
+  EnableGeoZoneAF?: boolean;
+  EnableTLS1?: boolean;
+  EnableTLS1_1?: boolean;
+  LoggingIPAnonymizationEnabled?: boolean;
 };
 
 // POST /pullzone/{id}/setForceSSL

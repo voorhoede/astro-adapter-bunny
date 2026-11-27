@@ -39,12 +39,15 @@ export const configurePullZone = async ({
   storageZoneId,
   scriptId,
   rules,
+  settings,
 }: {
   id: number;
   name: string;
   storageZoneId: number;
   scriptId?: number;
   rules: EdgeRule[];
+  /** The settings the site chose in bunny.config.ts. */
+  settings: PullZoneUpdate;
 }) => {
   // A site with a script sets Cache-Control itself, so the pull zone respects it.
   let cache: PullZoneUpdate = { CacheControlMaxAgeOverride: -1 };
@@ -56,6 +59,8 @@ export const configurePullZone = async ({
   // Origin type, storage zone and script in one call: without OriginType, bunny.net kept the old storage zone.
   await request("POST", posix.join("pullzone", String(id)), {
     body: {
+      // The site's own choices first, so the settings below that a release needs always win.
+      ...settings,
       OriginType: 2,
       StorageZoneId: storageZoneId,
       MiddlewareScriptId: scriptId ?? null,

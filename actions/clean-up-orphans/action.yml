@@ -6,6 +6,9 @@ inputs:
   bunny_api_key:
     description: The API key of the bunny.net account
     required: true
+  site:
+    description: The site's name in every resource name, before the owner; defaults to the repository's name. A second build of the same commits, such as a preview, needs its own.
+    default: ""
   min_age_hours:
     description: Only releases older than this; a running deploy has not created its deployment yet
     default: "1"
