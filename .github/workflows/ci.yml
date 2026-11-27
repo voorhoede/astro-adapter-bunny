@@ -19,3 +19,6 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run check
+      - run: npm run typecheck -w actions
+      # GitHub runs an action's dist/index.js as committed, so it has to match its source.
+      - run: npm run build -w actions && git diff --exit-code -- actions

@@ -1,0 +1,14 @@
+{
+  "name": "@astro-adapter-bunny/actions",
+  "private": true,
+  "type": "module",
+  "description": "GitHub Actions that deploy an astro-adapter-bunny build to bunny.net.",
+  "scripts": {
+    "build": "rolldown -c",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1"
+  }
+}
