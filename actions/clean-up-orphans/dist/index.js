@@ -35999,7 +35999,8 @@ try {
 	for (const zone of zones) {
 		const sha = releaseSha(zone.Name);
 		if (!sha || deployed.has(sha)) continue;
-		if (new Date(zone.DateModified).getTime() > cutoff) continue;
+		const modified = new Date(/Z|[+-]\d\d:\d\d$/.test(zone.DateModified) ? zone.DateModified : `${zone.DateModified}Z`);
+		if (Number.isNaN(modified.getTime()) || modified.getTime() > cutoff) continue;
 		if (dryRun) {
 			info(`Would delete orphaned release ${zone.Name}`);
 			continue;

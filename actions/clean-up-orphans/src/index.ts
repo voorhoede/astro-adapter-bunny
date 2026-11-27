@@ -24,7 +24,10 @@ try {
       continue;
     }
     // A deploy that runs now has made its release but not yet its deployment.
-    if (new Date(zone.DateModified).getTime() > cutoff) {
+    // bunny.net gives the time in UTC without saying so; read bare, it would be local time, and off by hours.
+    const modified = new Date(/Z|[+-]\d\d:\d\d$/.test(zone.DateModified) ? zone.DateModified : `${zone.DateModified}Z`);
+    // A date that does not parse keeps the release: deleting is the step that cannot be undone.
+    if (Number.isNaN(modified.getTime()) || modified.getTime() > cutoff) {
       continue;
     }
 
