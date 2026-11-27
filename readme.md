@@ -31,6 +31,10 @@ export default defineConfig({
 adapter: bunny({ imageService: 'passthrough' }),
 ```
 
+## Deploy
+
+The adapter only builds. The [actions](actions/README.md) deploy the build to bunny.net from GitHub Actions; `defineConfig` from `astro-adapter-bunny/config` types their `bunny.config.ts`.
+
 ## Preview
 
 `astro preview` runs the built script under [Deno](https://deno.com/), the runtime bunny.net runs it on, so it needs Deno installed. Files come from `dist/client`, the way the storage zone serves them.
