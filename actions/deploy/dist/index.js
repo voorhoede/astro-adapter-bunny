@@ -16775,8 +16775,20 @@ const createScript = ({ name }) => request$1("POST", "compute/script", { body: {
 * go live together.
 */
 const publishScript = async ({ id, code, variables, secrets }) => {
+	await request$1("POST", posix.join("compute/script", String(id), "code"), { body: { Code: code } });
+	await updateScriptValues({
+		id,
+		variables,
+		secrets
+	});
+};
+/**
+* Sets variables and secrets on a script and publishes it with the code it
+* has, such as an earlier release's script after a secret was rotated. Values
+* it does not name stay as they are.
+*/
+const updateScriptValues = async ({ id, variables, secrets }) => {
 	const script = posix.join("compute/script", String(id));
-	await request$1("POST", posix.join(script, "code"), { body: { Code: code } });
 	await Promise.all([...Object.entries(variables).map(async ([name, value]) => {
 		await request$1("PUT", posix.join(script, "variables"), { body: {
 			Name: name,
@@ -36447,7 +36459,7 @@ const readManifest = () => {
 		throw new Error("No .bunny/build.json: build the site with astro-adapter-bunny before deploying it.");
 	}
 };
-// deploy/src/parse-lines.ts
+// shared/parse-lines.ts
 const parseLines = (lines) => {
 	const result = {};
 	for (const line of lines) {

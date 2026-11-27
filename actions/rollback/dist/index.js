@@ -16496,6 +16496,38 @@ var ExitCode;
 	ExitCode[ExitCode["Failure"] = 1] = "Failure";
 })(ExitCode || (ExitCode = {}));
 /**
+* Registers a secret which will get masked from logs
+*
+* @param secret - Value of the secret to be masked
+* @remarks
+* This function instructs the Actions runner to mask the specified value in any
+* logs produced during the workflow run. Once registered, the secret value will
+* be replaced with asterisks (***) whenever it appears in console output, logs,
+* or error messages.
+*
+* This is useful for protecting sensitive information such as:
+* - API keys
+* - Access tokens
+* - Authentication credentials
+* - URL parameters containing signatures (SAS tokens)
+*
+* Note that masking only affects future logs; any previous appearances of the
+* secret in logs before calling this function will remain unmasked.
+*
+* @example
+* ```typescript
+* // Register an API token as a secret
+* const apiToken = "abc123xyz456";
+* setSecret(apiToken);
+*
+* // Now any logs containing this value will show *** instead
+* console.log(`Using token: ${apiToken}`); // Outputs: "Using token: ***"
+* ```
+*/
+function setSecret(secret) {
+	issueCommand("add-mask", {}, secret);
+}
+/**
 * Gets the value of an input.
 * Unless trimWhitespace is set to false in InputOptions, the value is also trimmed.
 * Returns an empty string if the value is not defined.
@@ -16509,6 +16541,19 @@ function getInput(name, options) {
 	if (options && options.required && !val) throw new Error(`Input required and not supplied: ${name}`);
 	if (options && options.trimWhitespace === false) return val;
 	return val.trim();
+}
+/**
+* Gets the values of an multiline input.  Each value is also trimmed.
+*
+* @param     name     name of the input to get
+* @param     options  optional. See InputOptions.
+* @returns   string[]
+*
+*/
+function getMultilineInput(name, options) {
+	const inputs = getInput(name, options).split("\n").filter((x) => x !== "");
+	if (options && options.trimWhitespace === false) return inputs;
+	return inputs.map((input) => input.trim());
 }
 /**
 * Gets the input value of the boolean type in the YAML 1.2 "core schema" specification.
@@ -16741,6 +16786,26 @@ const configurePullZone = async ({ id, name, storageZoneId, scriptId, rules, set
 // shared/bunny/script.ts
 const getScript = async ({ name }) => {
 	return (await requestList("compute/script", { search: name })).find((script) => script.Name === name);
+};
+/**
+* Sets variables and secrets on a script and publishes it with the code it
+* has, such as an earlier release's script after a secret was rotated. Values
+* it does not name stay as they are.
+*/
+const updateScriptValues = async ({ id, variables, secrets }) => {
+	const script = posix.join("compute/script", String(id));
+	await Promise.all([...Object.entries(variables).map(async ([name, value]) => {
+		await request$1("PUT", posix.join(script, "variables"), { body: {
+			Name: name,
+			DefaultValue: value
+		} });
+	}), ...Object.entries(secrets).map(async ([name, value]) => {
+		await request$1("PUT", posix.join(script, "secrets"), { body: {
+			Name: name,
+			Secret: value
+		} });
+	})]);
+	await request$1("POST", posix.join(script, "publish"), { body: {} });
 };
 // shared/bunny/storage-zone.ts
 const getStorageZone = async ({ name }) => {
@@ -36303,6 +36368,16 @@ const pullZoneSettings = ({ regions, minimumTls, anonymizeIps }) => {
 	if (anonymizeIps !== void 0) settings.LoggingIPAnonymizationEnabled = anonymizeIps;
 	return settings;
 };
+// shared/parse-lines.ts
+const parseLines = (lines) => {
+	const result = {};
+	for (const line of lines) {
+		const at = line.indexOf("=");
+		if (at === -1) continue;
+		result[line.slice(0, at).trim()] = line.slice(at + 1);
+	}
+	return result;
+};
 // rollback/src/index.ts
 try {
 	process.chdir(getInput("working_directory") || ".");
@@ -36321,6 +36396,19 @@ try {
 	const rules = await readEdgeRules({ pullZoneId: releasePullZone.Id });
 	const script = await getScript({ name });
 	const config = await loadConfig();
+	const secrets = parseLines(getMultilineInput("secrets"));
+	const variables = parseLines(getMultilineInput("variables"));
+	for (const value of Object.values(secrets)) setSecret(value);
+	if (Object.keys(secrets).length + Object.keys(variables).length > 0) {
+		if (script) {
+			await updateScriptValues({
+				id: script.Id,
+				variables,
+				secrets
+			});
+			info(`Set ${Object.keys(secrets).length} secrets and ${Object.keys(variables).length} variables on ${name}`);
+		} else warning(`Release ${name} has no script, so its secrets and variables are not set.`);
+	}
 	const url = await switchPullZone({
 		name: branchPullZoneName(branch),
 		release: name,

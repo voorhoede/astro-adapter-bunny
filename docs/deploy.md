@@ -199,7 +199,7 @@ Limits: every distinct value takes one edge rule, from the same 50 as the redire
 
 - **Secrets** from `astro:env` (`access: 'secret'`) and anything read through `process.env` at runtime are script variables.
 - A script takes 128 variables (129 breaks startup), 2 KB per value at runtime, and the API refuses values over 4,096 characters. About 242 to 254 KB of values in total answered 431.
-- Variables belong to a script, and every release has its own script, so the tool sets them all on every deploy. A rollback brings back the values the earlier release had, including ones revoked since.
+- Variables belong to a script, and every release has its own script, so the tool sets them all on every deploy. A rollback brings back the values the earlier release had, including ones revoked since, unless it sets the current ones on that script and publishes it before switching. Measured on bunny.net on 2026-11-27: publishing an earlier release's script with a changed variable, and no new code, served the new value after the switch.
 
 ## Optional
 

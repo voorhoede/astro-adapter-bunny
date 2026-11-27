@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `clean-up`, `teardown` and `clean-up-orphans` count and delete releases instead of commits, and a deployment names its release.
 - `rollback` takes a `release` to go back to; with a `commit`, it goes back to that commit's newest release.
 
+### Added
+- `rollback` takes `secrets` and `variables`, which replace those of the release it goes back to, such as a token rotated since.
+
 ### Fixed
 - The recipes no longer record two deployments per deploy: a job uses its environment with `deployment: false`.
 

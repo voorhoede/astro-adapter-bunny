@@ -34,11 +34,26 @@ export const publishScript = async ({
   variables: Record<string, string>;
   secrets: Record<string, string>;
 }) => {
+  await request("POST", posix.join("compute/script", String(id), "code"), { body: { Code: code } satisfies ScriptCode });
+  await updateScriptValues({ id, variables, secrets });
+};
+
+/**
+ * Sets variables and secrets on a script and publishes it with the code it
+ * has, such as an earlier release's script after a secret was rotated. Values
+ * it does not name stay as they are.
+ */
+export const updateScriptValues = async ({
+  id,
+  variables,
+  secrets,
+}: {
+  id: number;
+  variables: Record<string, string>;
+  secrets: Record<string, string>;
+}) => {
   const script = posix.join("compute/script", String(id));
 
-  await request("POST", posix.join(script, "code"), { body: { Code: code } satisfies ScriptCode });
-
-  // Every release has its own script, so a deploy sets all of them again.
   await Promise.all([
     ...Object.entries(variables).map(async ([name, value]) => {
       await request("PUT", posix.join(script, "variables"), {

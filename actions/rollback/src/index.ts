@@ -1,12 +1,13 @@
-import { getInput, info, setFailed, setOutput } from "@actions/core";
+import { getInput, getMultilineInput, info, setFailed, setOutput, setSecret, warning } from "@actions/core";
 import { readEdgeRules } from "../../shared/bunny/edge-rules.ts";
 import { getPullZone } from "../../shared/bunny/pull-zone.ts";
-import { getScript } from "../../shared/bunny/script.ts";
+import { getScript, updateScriptValues } from "../../shared/bunny/script.ts";
 import { getStorageZone } from "../../shared/bunny/storage-zone.ts";
 import { createDeployment, deployedReleases, isProductionDeployment } from "../../shared/github/deployments.ts";
 import { branchName, branchPullZoneName, siteName } from "../../shared/github/names.ts";
 import { switchPullZone } from "../../shared/releases/switch-pull-zone.ts";
 import { loadConfig } from "../../shared/config.ts";
+import { parseLines } from "../../shared/parse-lines.ts";
 
 try {
   // The site's folder, with its bunny.config.ts; without one, the pull zone keeps its settings.
@@ -34,6 +35,21 @@ try {
   const rules = await readEdgeRules({ pullZoneId: releasePullZone.Id });
   const script = await getScript({ name });
   const config = await loadConfig();
+
+  // The release's script has the values of its own deploy, such as a token rotated since; these replace them before it serves again.
+  const secrets = parseLines(getMultilineInput("secrets"));
+  const variables = parseLines(getMultilineInput("variables"));
+  for (const value of Object.values(secrets)) {
+    setSecret(value);
+  }
+  if (Object.keys(secrets).length + Object.keys(variables).length > 0) {
+    if (script) {
+      await updateScriptValues({ id: script.Id, variables, secrets });
+      info(`Set ${Object.keys(secrets).length} secrets and ${Object.keys(variables).length} variables on ${name}`);
+    } else {
+      warning(`Release ${name} has no script, so its secrets and variables are not set.`);
+    }
+  }
 
   const url = await switchPullZone({
     name: branchPullZoneName(branch),

@@ -98,6 +98,9 @@ jobs:
           bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
           environment: Production
           release: ${{ inputs.release }}
+          # The current values, so an earlier release does not run with a token rotated since.
+          secrets: |
+            API_TOKEN=${{ secrets.API_TOKEN }}
 ```
 
 A rollback can only go back to a release the clean-up kept, so `releases_to_keep` is also how far back a rollback reaches. Instead of `release`, it also takes a `commit`, and then goes back to that commit's newest release. It shares the deploy's concurrency group, so the two never switch the pull zone at the same time.

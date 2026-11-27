@@ -12,7 +12,7 @@ import { loadConfig } from "../../shared/config.ts";
 import { buildEdgeRules } from "./build-edge-rules.ts";
 import { checkSecrets } from "./check-secrets.ts";
 import { readManifest } from "./manifest.ts";
-import { parseLines } from "./parse-lines.ts";
+import { parseLines } from "../../shared/parse-lines.ts";
 import { listFiles, uploadFiles } from "./upload-files.ts";
 
 try {

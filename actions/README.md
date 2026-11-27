@@ -37,7 +37,7 @@ The inputs and outputs of each action are in its `action.yml`.
 
 ## Secrets and variables
 
-Script secrets and variables go in as `secrets` and `variables`, one `NAME=value` per line. Every release has its own script, so each deploy sets them all. The deploy fails before it makes anything when the build's `astro:env` schema has a required secret that `secrets` does not set.
+Script secrets and variables go in as `secrets` and `variables`, one `NAME=value` per line. Every release has its own script, so each deploy sets them all. A rollback brings back the values of the release's own deploy, unless it gets `secrets` and `variables` too: then they replace those, such as a token rotated since. The deploy fails before it makes anything when the build's `astro:env` schema has a required secret that `secrets` does not set.
 
 ## `bunny.config.ts`
 
