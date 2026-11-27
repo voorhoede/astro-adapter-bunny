@@ -66,7 +66,7 @@ Columns for prior art: **Astro** is the official adapters (Node, Vercel, Netlify
 | `build.format: 'preserve'` | ✅ | Like `file`, except index routes, which the pull zone resolves to `index.html`. | Node | no | yes | no |
 | `build.assetsPrefix` | ➖ | | | | | |
 | `astro:env` secrets | ✅ | Script variables. | all | yes | yes | yes |
-| Server islands | ✅ | Needs a fixed `ASTRO_KEY` across releases. | all | yes | yes | yes |
+| Server islands | ✅ | A page open during a deploy can show an empty island until it reloads, since each build encrypts props with its own key; Astro's [server islands guide](https://docs.astro.build/en/guides/server-islands/) describes a fixed `ASTRO_KEY` for that. | all | yes | yes | yes |
 | Actions | ✅ | Form action and JSON call to `/_actions/*`. | all | tested | untested | untested |
 | Sessions | ❌ | No default driver. ⛔ Storage is a weak session store. | Node, Netlify, Cloudflare | Storage driver | none | Storage driver |
 | `routeRules` and `Astro.cache` | ❌ | No cache provider, so no CDN headers. | Vercel, Netlify, Cloudflare | yes | yes | yes |

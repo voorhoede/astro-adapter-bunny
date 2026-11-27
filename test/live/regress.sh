@@ -36,7 +36,12 @@ check "redirect dynamic to prerendered" 301 "location: .*/blog/a" "$H/old-blog/a
 check "redirect POST" 308 "location: .*/about" -X POST -H "origin: $H" -d m=1 "$H/old"
 check "POST echo" 200 "received" -X POST -H "origin: $H" -d m=1 "$H/api/echo"
 check "POST cross-site" 403 "" -X POST -H "origin: https://evil.example" -d m=1 "$H/api/echo"
-check "POST http" 200 "received" -X POST -H "origin: ${H/https/http}" -d m=1 "${H/https/http}/api/echo"
+# A pull zone the deploy makes forces SSL, so http never reaches the script there; without it, the script has to accept a POST over http.
+if curl -s -o /dev/null -w '%{redirect_url}' "${H/https/http}/?$(t)" | grep -q '^https://'; then
+  check "POST http forced to https" 301 "location: https://" -X POST -H "origin: ${H/https/http}" -d m=1 "${H/https/http}/api/echo"
+else
+  check "POST http" 200 "received" -X POST -H "origin: ${H/https/http}" -d m=1 "${H/https/http}/api/echo"
+fi
 check "POST on file" 405 "allow: GET, HEAD" -X POST -H "origin: $H" -d m=1 "$H/favicon.svg"
 check "POST on prerendered page" 405 "allow: GET, HEAD" -X POST -H "origin: $H" -d m=1 "$H/about/"
 check "POST missing" 404 "Custom 404" -X POST -H "origin: $H" -d m=1 "$H/missing"
