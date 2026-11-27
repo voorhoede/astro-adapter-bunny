@@ -18,6 +18,9 @@ inputs:
   commit:
     description: The commit to go back to, short or full; empty for the release before the current one
     default: ""
+  production:
+    description: Whether GitHub shows the deployment as production; defaults to whether the branch is the repository's default branch. A second build of that branch, such as a preview, sets false.
+    default: ""
   github_token:
     description: Reads and creates the environment's deployments
     default: ${{ github.token }}

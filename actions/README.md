@@ -19,7 +19,7 @@ A **release** is one build of one commit: a storage zone with the files, an Edge
 
 Each branch has one more pull zone, `{branch}-{site}-{owner}`, which the deploy moves to the branch's newest release. Production is the branch pull zone of the repository's default branch. A pull zone name has 5 to 60 characters, so a branch too long to fit is cut and gets a short hash of its full name.
 
-`site` defaults to the repository's name, and the owner is always added, so two repositories never share a name. A repository with several sites, or a second build of the same commits such as a preview, gives each its own `site`.
+`site` defaults to the repository's name, and the owner is always added, so two repositories never share a name. A repository with several sites, or a second build of the same commits such as a preview, gives each its own `site`. GitHub shows every deployment of the default branch as production, so a preview's `create-deployment` and `rollback` also set `production: false`.
 
 A deploy makes the release, checks that the commit's URL answers with it, then moves the branch's pull zone and checks that one too. When the branch does not answer with the new release, the deploy moves it back to the release it had and fails. Every deploy also applies the edge rules the build needs (headers from `_headers`, and for a site without a server its redirects, trailing slash and asset caching) and the settings from `bunny.config.ts`. [`docs/deploy.md`](../docs/deploy.md) describes each step.
 

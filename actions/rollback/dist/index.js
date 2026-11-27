@@ -16511,6 +16511,32 @@ function getInput(name, options) {
 	return val.trim();
 }
 /**
+* Gets the input value of the boolean type in the YAML 1.2 "core schema" specification.
+* Support boolean input list: `true | True | TRUE | false | False | FALSE` .
+* The return value is also in boolean type.
+* ref: https://yaml.org/spec/1.2/spec.html#id2804923
+*
+* @param     name     name of the input to get
+* @param     options  optional. See InputOptions.
+* @returns   boolean
+*/
+function getBooleanInput(name, options) {
+	const trueValue = [
+		"true",
+		"True",
+		"TRUE"
+	];
+	const falseValue = [
+		"false",
+		"False",
+		"FALSE"
+	];
+	const val = getInput(name, options);
+	if (trueValue.includes(val)) return true;
+	if (falseValue.includes(val)) return false;
+	throw new TypeError(`Input does not meet YAML 1.2 "Core Schema" specification: ${name}\nSupport boolean input list: \`true | True | TRUE | false | False | FALSE\``);
+}
+/**
 * Sets the value of an output.
 *
 * @param     name     name of the output to set
@@ -36091,6 +36117,15 @@ const markInactive = async ({ id }) => {
 };
 /** Whether the branch is the repository's default branch, which deploys go live from. */
 const isProductionBranch = (branch) => branch === context.payload.repository?.default_branch;
+/**
+* Whether a deployment goes in GitHub as production: the `production` input
+* when it is set, else whether the branch is the default branch. A second
+* build of the default branch, such as a preview, sets it to false.
+*/
+const isProductionDeployment = (branch) => {
+	if (getInput("production") === "") return isProductionBranch(branch);
+	return getBooleanInput("production");
+};
 // shared/github/names.ts
 const sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 const MAX_NAME = 60;
@@ -36290,7 +36325,7 @@ try {
 		sha,
 		branch,
 		url,
-		production: isProductionBranch(branch),
+		production: isProductionDeployment(branch),
 		description: "Rollback"
 	});
 	info(`${branch} serves ${name} again`);

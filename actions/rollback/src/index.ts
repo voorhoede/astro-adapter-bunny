@@ -4,7 +4,7 @@ import { readEdgeRules } from "../../shared/bunny/edge-rules.ts";
 import { getPullZone } from "../../shared/bunny/pull-zone.ts";
 import { getScript } from "../../shared/bunny/script.ts";
 import { getStorageZone } from "../../shared/bunny/storage-zone.ts";
-import { createDeployment, deployedReleases, isProductionBranch } from "../../shared/github/deployments.ts";
+import { createDeployment, deployedReleases, isProductionDeployment } from "../../shared/github/deployments.ts";
 import { branchName, branchPullZoneName, releaseName } from "../../shared/github/names.ts";
 import { switchPullZone } from "../../shared/releases/switch-pull-zone.ts";
 import { loadConfig } from "../../shared/config.ts";
@@ -47,7 +47,7 @@ try {
     sha,
     branch,
     url,
-    production: isProductionBranch(branch),
+    production: isProductionDeployment(branch),
     description: "Rollback",
   });
 

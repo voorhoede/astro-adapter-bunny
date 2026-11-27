@@ -1,5 +1,5 @@
 import { getInput, info, setFailed } from "@actions/core";
-import { createDeployment, isProductionBranch } from "../../shared/github/deployments.ts";
+import { createDeployment, isProductionDeployment } from "../../shared/github/deployments.ts";
 import { branchName, commitSha } from "../../shared/github/names.ts";
 
 try {
@@ -11,7 +11,7 @@ try {
     sha,
     branch,
     url: new URL(getInput("url", { required: true })),
-    production: isProductionBranch(branch),
+    production: isProductionDeployment(branch),
   });
 
   info(`Deployment ${id} for ${sha.slice(0, 7)} on ${branch}`);

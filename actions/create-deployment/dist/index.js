@@ -16492,6 +16492,32 @@ function getInput(name, options) {
 	return val.trim();
 }
 /**
+* Gets the input value of the boolean type in the YAML 1.2 "core schema" specification.
+* Support boolean input list: `true | True | TRUE | false | False | FALSE` .
+* The return value is also in boolean type.
+* ref: https://yaml.org/spec/1.2/spec.html#id2804923
+*
+* @param     name     name of the input to get
+* @param     options  optional. See InputOptions.
+* @returns   boolean
+*/
+function getBooleanInput(name, options) {
+	const trueValue = [
+		"true",
+		"True",
+		"TRUE"
+	];
+	const falseValue = [
+		"false",
+		"False",
+		"FALSE"
+	];
+	const val = getInput(name, options);
+	if (trueValue.includes(val)) return true;
+	if (falseValue.includes(val)) return false;
+	throw new TypeError(`Input does not meet YAML 1.2 "Core Schema" specification: ${name}\nSupport boolean input list: \`true | True | TRUE | false | False | FALSE\``);
+}
+/**
 * Sets the action status to failed.
 * When the action exits it will be with an exit code of 1
 * @param message add error issue message
@@ -35856,6 +35882,15 @@ const markInactive = async ({ id }) => {
 };
 /** Whether the branch is the repository's default branch, which deploys go live from. */
 const isProductionBranch = (branch) => branch === context.payload.repository?.default_branch;
+/**
+* Whether a deployment goes in GitHub as production: the `production` input
+* when it is set, else whether the branch is the default branch. A second
+* build of the default branch, such as a preview, sets it to false.
+*/
+const isProductionDeployment = (branch) => {
+	if (getInput("production") === "") return isProductionBranch(branch);
+	return getBooleanInput("production");
+};
 // shared/github/names.ts
 /** The branch that was pushed, or the pull request's own branch; on a pull request context.ref is refs/pull/<n>/merge. */
 const branchName = () => context.payload.pull_request?.head.ref ?? context.ref.replace("refs/heads/", "");
@@ -35870,7 +35905,7 @@ try {
 		sha,
 		branch,
 		url: new URL(getInput("url", { required: true })),
-		production: isProductionBranch(branch)
+		production: isProductionDeployment(branch)
 	})} for ${sha.slice(0, 7)} on ${branch}`);
 } catch (error) {
 	setFailed(error instanceof Error ? error.message : String(error));

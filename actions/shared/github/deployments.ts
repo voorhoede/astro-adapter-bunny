@@ -1,4 +1,4 @@
-import { getInput } from "@actions/core";
+import { getBooleanInput, getInput } from "@actions/core";
 import { context, getOctokit } from "@actions/github";
 
 export type Deployment = { id: number; sha: string; branch: string | undefined };
@@ -122,3 +122,15 @@ export const deleteDeployment = async ({ id }: { id: number }) => {
 
 /** Whether the branch is the repository's default branch, which deploys go live from. */
 export const isProductionBranch = (branch: string) => branch === context.payload.repository?.default_branch;
+
+/**
+ * Whether a deployment goes in GitHub as production: the `production` input
+ * when it is set, else whether the branch is the default branch. A second
+ * build of the default branch, such as a preview, sets it to false.
+ */
+export const isProductionDeployment = (branch: string) => {
+  if (getInput("production") === "") {
+    return isProductionBranch(branch);
+  }
+  return getBooleanInput("production");
+};
