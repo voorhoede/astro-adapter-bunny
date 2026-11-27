@@ -1,0 +1,18 @@
+name: bunny.net URLs
+author: Voorhoede
+description: The commit and branch URLs a deploy of this run will have, for a build that needs its own address
+
+inputs:
+  site:
+    description: The site, which names its resources on bunny.net; defaults to the repository's name. The same as the deploy's.
+    default: ""
+
+outputs:
+  commit_url:
+    description: The address of this commit's release
+  branch_url:
+    description: The address of the branch, such as the SITE_URL of the build
+
+runs:
+  using: "node24"
+  main: "dist/index.js"
