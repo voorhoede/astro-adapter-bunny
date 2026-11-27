@@ -35938,11 +35938,11 @@ const sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").re
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 40) throw new Error(`The site name ${site} is longer than 40 characters, which leaves no room for a release.`);
+	if (site.length > 51) throw new Error(`The site name ${site} is longer than 51 characters, which leaves no room for a release.`);
 	return site;
 };
 /** Whether a name is a release of this site, as releaseName makes it. */
-const isReleaseName = (name) => new RegExp(`^[0-9a-f]{7}-\\d+(-\\d+)?-${siteName()}$`).test(name);
+const isReleaseName = (name) => new RegExp(`^[0-9a-f]{8}-${siteName()}$`).test(name);
 /** Whether a resource belongs to this site: a release or a branch pull zone. */
 const isSiteResource = (name) => name.endsWith(`-${siteName()}`);
 // shared/bunny/pull-zone.ts

@@ -16,7 +16,7 @@ inputs:
     description: The GitHub environment the branch deploys to, such as "Site Production"
     required: true
   release:
-    description: The release to go back to, as the Deployments page names it, or only its commit and build, such as c50ccf3-412; takes precedence over commit
+    description: The release to go back to, as the Deployments page names it, or only its hash, such as 3f9a1c2e; takes precedence over commit
     default: ""
   commit:
     description: The commit to go back to, short or full, whose newest release is used; with neither, the release before the current one

@@ -21,7 +21,7 @@ inputs:
 
 outputs:
   release:
-    description: The release's name, such as c50ccf3-412-site-owner
+    description: The release's name, such as 3f9a1c2e-site-owner
   release_url:
     description: The release's own URL, which keeps answering with this build
   branch_url:

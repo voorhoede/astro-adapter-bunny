@@ -36148,7 +36148,7 @@ const MAX_NAME = 60;
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 40) throw new Error(`The site name ${site} is longer than 40 characters, which leaves no room for a release.`);
+	if (site.length > 51) throw new Error(`The site name ${site} is longer than 51 characters, which leaves no room for a release.`);
 	return site;
 };
 /** The branch that was pushed, or the pull request's own branch; on a pull request context.ref is refs/pull/<n>/merge. */

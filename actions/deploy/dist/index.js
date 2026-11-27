@@ -36087,7 +36087,7 @@ const MAX_NAME = 60;
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 40) throw new Error(`The site name ${site} is longer than 40 characters, which leaves no room for a release.`);
+	if (site.length > 51) throw new Error(`The site name ${site} is longer than 51 characters, which leaves no room for a release.`);
 	return site;
 };
 /** The branch that was pushed, or the pull request's own branch; on a pull request context.ref is refs/pull/<n>/merge. */
@@ -36095,21 +36095,15 @@ const branchName = () => context.payload.pull_request?.head.ref ?? context.ref.r
 /** The commit that was built: a pull request's own commit, not the merge commit GitHub makes. */
 const commitSha = () => context.payload.pull_request?.head.sha ?? context.sha;
 /**
-* This run's build: the workflow's run number, and the attempt when it ran
-* again. Both only go up, so a build never reuses the name of a release that
-* was deleted, which bunny.net refuses for a while after.
-*/
-const buildId = () => context.runAttempt > 1 ? `${context.runNumber}-${context.runAttempt}` : String(context.runNumber);
-/**
 * The name of this run's release, its storage zone, script and pull zone, such
-* as c50ccf3-412-astro-adapter-bunny-voorhoede: the commit, then the build. A
-* rebuild of the same commit, such as for changed content, is a release of its
-* own. A deploy and the steps after it in the same run get the same name.
+* as 3f9a1c2e-astro-adapter-bunny-voorhoede: a hash of the workflow run and
+* its attempt, so every build is a release of its own, also a rebuild of the
+* same commit, and a name is never used twice, which bunny.net refuses for a
+* while after a delete. A deploy that runs again in the same attempt goes on
+* with its own release. The commit is in the release file and the deployment.
 */
 const releaseName = () => {
-	const name = `${commitSha().slice(0, 7)}-${buildId()}-${siteName()}`;
-	if (name.length > MAX_NAME) throw new Error(`The release name ${name} is longer than ${MAX_NAME} characters.`);
-	return name;
+	return `${createHash("sha256").update(`${context.runId}-${context.runAttempt}`).digest("hex").slice(0, 8)}-${siteName()}`;
 };
 /**
 * The name of a branch's pull zone, such as feat-try-astro-adapter-bunny-voorhoede.

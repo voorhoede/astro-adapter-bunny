@@ -56,7 +56,7 @@ jobs:
           releases_to_keep: 5
 ```
 
-The site answers at `https://main-{repository}-{owner}.b-cdn.net/`, and each release keeps its own URL, `https://{commit}-{build}-{repository}-{owner}.b-cdn.net/`, until the clean-up deletes it. Every run is a release of its own, also a rerun of the same commit, such as for changed content, so a rollback can go back to the content before it. A custom domain goes on the `main` pull zone in bunny.net's dashboard; the deploy leaves hostnames alone.
+The site answers at `https://main-{repository}-{owner}.b-cdn.net/`, and each release keeps its own URL, `https://{release}-{repository}-{owner}.b-cdn.net/`, until the clean-up deletes it. Every run is a release of its own, also a rerun of the same commit, such as for changed content, so a rollback can go back to the content before it. A custom domain goes on the `main` pull zone in bunny.net's dashboard; the deploy leaves hostnames alone.
 
 Set Astro's `site` to the production domain in `astro.config.ts`, so canonical URLs and the sitemap point at it.
 
@@ -71,7 +71,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Release to go back to, as the Deployments page names it, such as c50ccf3-412; empty for the release before the current one
+        description: Release to go back to, as the Deployments page names it, such as 3f9a1c2e; empty for the release before the current one
         required: false
 
 permissions:

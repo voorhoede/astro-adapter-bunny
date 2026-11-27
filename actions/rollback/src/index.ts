@@ -82,7 +82,7 @@ async function targetRelease({
   const releases = await deployedReleases({ environment, branch });
 
   if (release) {
-    // The whole name, or the commit and build without the site, such as c50ccf3-412.
+    // The whole name, or only its hash, such as 3f9a1c2e.
     const found = releases.find((entry) => entry.release === release || entry.release === `${release}-${siteName()}`);
     if (!found) {
       throw new Error(`${branch} has no deployment of release ${release} in ${environment}.`);

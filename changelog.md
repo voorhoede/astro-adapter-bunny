@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Breaking:** every build is a release of its own, named `{commit}-{build}-{site}-{owner}` after the workflow run, so a rebuild of the same commit, such as for changed content, no longer changes the release that is live. A site's name with its owner may have up to 40 characters.
+- **Breaking:** every build is a release of its own, named `{release}-{site}-{owner}` with a hash of the workflow run, so a rebuild of the same commit, such as for changed content, no longer changes the release that is live. The name no longer contains the commit; the deployment and the release file do.
 - **Breaking:** `deploy` outputs `release` and `release_url` instead of `commit_url`, and `create-deployment` takes the deploy's `release` as a required input.
 - `clean-up`, `teardown` and `clean-up-orphans` count and delete releases instead of commits, and a deployment names its release.
 - `rollback` takes a `release` to go back to; with a `commit`, it goes back to that commit's newest release.

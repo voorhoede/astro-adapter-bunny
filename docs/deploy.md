@@ -37,7 +37,7 @@ Paths are relative to the project root and use forward slashes. bunny.net's cont
 
 A release is one build of one commit, and is not changed once deployed. A rebuild of the same commit, such as for changed content, makes a release of its own:
 
-- **A storage zone** that holds the release's `dist/client` at its root, named after the commit's short hash, the build and the site, such as `c50ccf3-412-docs-voorhoede`. The build is the workflow run's number, and its attempt from the second one on; both only go up, so a release never reuses a name.
+- **A storage zone** that holds the release's `dist/client` at its root, named after the release and the site, such as `3f9a1c2e-docs-voorhoede`. The release part is eight hex characters of a hash of the workflow run's id and attempt, so a name is never used twice. The release file and the GitHub deployment record its commit.
 - **A middleware Edge Script** with the release's `dist/index.js` and its variables and secrets, named like the zone, only for sites with `dist/index.js`. A script keeps the type it was created with, so it has to be created as a middleware script, not a standalone one.
 - **A release pull zone**, named like the zone, with the storage zone as its origin and the script as its middleware. It points at its release for as long as the release exists, so the release's URL never changes.
 
