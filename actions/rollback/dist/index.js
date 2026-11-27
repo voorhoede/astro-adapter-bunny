@@ -16579,6 +16579,174 @@ function warning(message, properties = {}) {
 function info(message) {
 	process.stdout.write(message + os$1.EOL);
 }
+// shared/bunny/request.ts
+const HOST = new URL("https://api.bunny.net/");
+var BunnyError = class extends Error {
+	status;
+	key;
+	constructor(status, key, message) {
+		super(message);
+		this.name = "BunnyError";
+		this.status = status;
+		this.key = key;
+	}
+};
+/**
+* Calls bunny.net's API with the action's `bunny_api_key`. Paths have no
+* leading slash, such as `pullzone/123`.
+*/
+const request$1 = async (method, path, { body, search } = {}) => {
+	const url = new URL(path, HOST);
+	for (const [name, value] of Object.entries(search ?? {})) url.searchParams.set(name, value);
+	const send = () => fetch(url, {
+		method,
+		headers: {
+			AccessKey: getInput("bunny_api_key", { required: true }),
+			Accept: "application/json",
+			...body !== void 0 && { "Content-Type": "application/json" }
+		},
+		...body !== void 0 && { body: JSON.stringify(body) }
+	});
+	let response = await send();
+	for (let attempt = 1; response.status === 429 && attempt <= 5; attempt++) {
+		const seconds = Number(response.headers.get("retry-after")) || attempt;
+		await response.body?.cancel();
+		await new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
+		response = await send();
+	}
+	const text = await response.text();
+	const data = text ? parseJson(text) : void 0;
+	if (!response.ok) {
+		const error = data;
+		throw new BunnyError(response.status, error?.ErrorKey, `${method} ${path} answered ${response.status}: ${error?.Message ?? text}`);
+	}
+	return data;
+};
+const parseJson = (text) => {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return text;
+	}
+};
+/**
+* Lists every item of a bunny.net list. Some lists answer a plain array, others
+* a page with `Items` and `HasMoreItems`, depending on the endpoint and query.
+*/
+const requestList = async (path, search) => {
+	const items = [];
+	for (let page = 1;; page++) {
+		const result = await request$1("GET", path, { search: {
+			...search,
+			page: String(page),
+			perPage: "1000"
+		} });
+		if (Array.isArray(result)) return result;
+		items.push(...result.Items);
+		if (!result.HasMoreItems) return items;
+	}
+};
+const rulesPath = (pullZoneId) => posix.join("pullzone", String(pullZoneId), "edgerules");
+/**
+* Makes the actions' rules on a pull zone match `rules`. A rule with the same
+* description is updated in place, so a header never goes missing in between;
+* then the actions' rules the build no longer has are deleted. A rule without
+* the prefix belongs to the site owner, and a read-only rule cannot change.
+*/
+const applyEdgeRules = async ({ pullZoneId, rules }) => {
+	const ours = (await request$1("GET", posix.join("pullzone", String(pullZoneId)))).EdgeRules.filter((rule) => rule.Description.startsWith("astro-adapter-bunny: ") && !rule.ReadOnly);
+	for (const rule of rules) {
+		const existing = ours.find((current) => current.Description === rule.Description);
+		let body = rule;
+		if (existing) body = {
+			...rule,
+			Guid: existing.Guid
+		};
+		await request$1("POST", posix.join(rulesPath(pullZoneId), "addOrUpdate"), { body });
+	}
+	const wanted = new Set(rules.map((rule) => rule.Description));
+	for (const rule of ours) if (!wanted.has(rule.Description)) await request$1("DELETE", posix.join(rulesPath(pullZoneId), rule.Guid));
+};
+/**
+* The actions' rules on a pull zone, without the fields bunny.net adds, so a
+* rollback can give a pull zone the rules of a release's own build.
+*/
+const readEdgeRules = async ({ pullZoneId }) => {
+	const pullZone = await request$1("GET", posix.join("pullzone", String(pullZoneId)));
+	const rules = [];
+	for (const rule of pullZone.EdgeRules) {
+		if (!rule.Description.startsWith("astro-adapter-bunny: ")) continue;
+		rules.push({
+			Description: rule.Description,
+			Enabled: rule.Enabled,
+			OrderIndex: rule.OrderIndex,
+			ActionType: rule.ActionType,
+			ActionParameter1: rule.ActionParameter1,
+			ActionParameter2: rule.ActionParameter2,
+			TriggerMatchingType: rule.TriggerMatchingType,
+			Triggers: rule.Triggers.map((trigger) => ({
+				Type: trigger.Type,
+				Parameter1: trigger.Parameter1,
+				PatternMatches: trigger.PatternMatches,
+				PatternMatchingType: trigger.PatternMatchingType
+			}))
+		});
+	}
+	return rules;
+};
+// shared/bunny/pull-zone.ts
+const getPullZone = async ({ name }) => {
+	return (await listPullZones({ search: name })).find((pullZone) => pullZone.Name === name);
+};
+const listPullZones = ({ search }) => requestList("pullzone", { search });
+const createPullZone = ({ name, storageZoneId }) => request$1("POST", "pullzone", { body: {
+	Name: name,
+	OriginType: 2,
+	StorageZoneId: storageZoneId
+} });
+const purgePullZone = ({ id }) => request$1("POST", posix.join("pullzone", String(id), "purgeCache"));
+/**
+* Points a pull zone at a release, with the settings of docs/deploy.md and
+* the release's edge rules. Running it again is safe, so it also repairs a
+* pull zone an earlier run left halfway.
+*/
+const configurePullZone = async ({ id, name, storageZoneId, scriptId, rules, settings }) => {
+	let cache = { CacheControlMaxAgeOverride: -1 };
+	if (!scriptId) cache = {
+		CacheControlMaxAgeOverride: 2592e3,
+		CacheControlPublicMaxAgeOverride: 0
+	};
+	await request$1("POST", posix.join("pullzone", String(id)), { body: {
+		...settings,
+		OriginType: 2,
+		StorageZoneId: storageZoneId,
+		MiddlewareScriptId: scriptId ?? null,
+		EnableSmartCache: false,
+		IgnoreQueryStrings: false,
+		DisableCookies: false,
+		EnableCacheSlice: false,
+		...cache
+	} });
+	const hostname = new URL("https://b-cdn.net");
+	hostname.hostname = `${name}.b-cdn.net`;
+	await request$1("POST", posix.join("pullzone", String(id), "setForceSSL"), { body: {
+		Hostname: hostname.hostname,
+		ForceSSL: true
+	} });
+	await applyEdgeRules({
+		pullZoneId: id,
+		rules
+	});
+};
+// shared/bunny/script.ts
+const getScript = async ({ name }) => {
+	return (await requestList("compute/script", { search: name })).find((script) => script.Name === name);
+};
+// shared/bunny/storage-zone.ts
+const getStorageZone = async ({ name }) => {
+	return (await listStorageZones({ search: name })).find((zone) => zone.Name === name);
+};
+const listStorageZones = ({ search }) => requestList("storagezone", { search });
 // ../node_modules/@actions/github/lib/context.js
 var Context = class {
 	/**
@@ -34143,7 +34311,7 @@ function withDefaults$1(oldEndpoint, newDefaults) {
 		defaults: withDefaults$1.bind(null, endpoint2)
 	});
 }
-var request$1 = withDefaults$1(endpoint, defaults_default);
+var request = withDefaults$1(endpoint, defaults_default);
 /* v8 ignore next -- @preserve */
 /* v8 ignore else -- @preserve */
 // ../node_modules/@octokit/graphql/dist-bundle/index.js
@@ -34224,7 +34392,7 @@ function withDefaults(request2, newDefaults) {
 		endpoint: newRequest.endpoint
 	});
 }
-withDefaults(request$1, {
+withDefaults(request, {
 	headers: { "user-agent": `octokit-graphql.js/${VERSION$3} ${getUserAgent()}` },
 	method: "POST",
 	url: "/graphql"
@@ -34312,7 +34480,7 @@ var Octokit = class {
 	constructor(options = {}) {
 		const hook = new before_after_hook_default.Collection();
 		const requestDefaults = {
-			baseUrl: request$1.endpoint.DEFAULTS.baseUrl,
+			baseUrl: request.endpoint.DEFAULTS.baseUrl,
 			headers: {},
 			request: Object.assign({}, options.request, { hook: hook.bind(null, "request") }),
 			mediaType: {
@@ -34324,7 +34492,7 @@ var Octokit = class {
 		if (options.baseUrl) requestDefaults.baseUrl = options.baseUrl;
 		if (options.previews) requestDefaults.mediaType.previews = options.previews;
 		if (options.timeZone) requestDefaults.headers["time-zone"] = options.timeZone;
-		this.request = request$1.defaults(requestDefaults);
+		this.request = request.defaults(requestDefaults);
 		this.graphql = withCustomRequest(this.request).defaults(requestDefaults);
 		this.log = createLogger(options.log);
 		this.hook = hook;
@@ -35873,179 +36041,11 @@ const context = new Context();
 function getOctokit(token, options, ...additionalPlugins) {
 	return new (GitHub.plugin(...additionalPlugins))(getOctokitOptions(token, options));
 }
-// shared/bunny/request.ts
-const HOST = new URL("https://api.bunny.net/");
-var BunnyError = class extends Error {
-	status;
-	key;
-	constructor(status, key, message) {
-		super(message);
-		this.name = "BunnyError";
-		this.status = status;
-		this.key = key;
-	}
-};
-/**
-* Calls bunny.net's API with the action's `bunny_api_key`. Paths have no
-* leading slash, such as `pullzone/123`.
-*/
-const request = async (method, path, { body, search } = {}) => {
-	const url = new URL(path, HOST);
-	for (const [name, value] of Object.entries(search ?? {})) url.searchParams.set(name, value);
-	const send = () => fetch(url, {
-		method,
-		headers: {
-			AccessKey: getInput("bunny_api_key", { required: true }),
-			Accept: "application/json",
-			...body !== void 0 && { "Content-Type": "application/json" }
-		},
-		...body !== void 0 && { body: JSON.stringify(body) }
-	});
-	let response = await send();
-	for (let attempt = 1; response.status === 429 && attempt <= 5; attempt++) {
-		const seconds = Number(response.headers.get("retry-after")) || attempt;
-		await response.body?.cancel();
-		await new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
-		response = await send();
-	}
-	const text = await response.text();
-	const data = text ? parseJson(text) : void 0;
-	if (!response.ok) {
-		const error = data;
-		throw new BunnyError(response.status, error?.ErrorKey, `${method} ${path} answered ${response.status}: ${error?.Message ?? text}`);
-	}
-	return data;
-};
-const parseJson = (text) => {
-	try {
-		return JSON.parse(text);
-	} catch {
-		return text;
-	}
-};
-/**
-* Lists every item of a bunny.net list. Some lists answer a plain array, others
-* a page with `Items` and `HasMoreItems`, depending on the endpoint and query.
-*/
-const requestList = async (path, search) => {
-	const items = [];
-	for (let page = 1;; page++) {
-		const result = await request("GET", path, { search: {
-			...search,
-			page: String(page),
-			perPage: "1000"
-		} });
-		if (Array.isArray(result)) return result;
-		items.push(...result.Items);
-		if (!result.HasMoreItems) return items;
-	}
-};
-const rulesPath = (pullZoneId) => posix.join("pullzone", String(pullZoneId), "edgerules");
-/**
-* Makes the actions' rules on a pull zone match `rules`. A rule with the same
-* description is updated in place, so a header never goes missing in between;
-* then the actions' rules the build no longer has are deleted. A rule without
-* the prefix belongs to the site owner, and a read-only rule cannot change.
-*/
-const applyEdgeRules = async ({ pullZoneId, rules }) => {
-	const ours = (await request("GET", posix.join("pullzone", String(pullZoneId)))).EdgeRules.filter((rule) => rule.Description.startsWith("astro-adapter-bunny: ") && !rule.ReadOnly);
-	for (const rule of rules) {
-		const existing = ours.find((current) => current.Description === rule.Description);
-		let body = rule;
-		if (existing) body = {
-			...rule,
-			Guid: existing.Guid
-		};
-		await request("POST", posix.join(rulesPath(pullZoneId), "addOrUpdate"), { body });
-	}
-	const wanted = new Set(rules.map((rule) => rule.Description));
-	for (const rule of ours) if (!wanted.has(rule.Description)) await request("DELETE", posix.join(rulesPath(pullZoneId), rule.Guid));
-};
-/**
-* The actions' rules on a pull zone, without the fields bunny.net adds, so a
-* rollback can give a pull zone the rules of a release's own build.
-*/
-const readEdgeRules = async ({ pullZoneId }) => {
-	const pullZone = await request("GET", posix.join("pullzone", String(pullZoneId)));
-	const rules = [];
-	for (const rule of pullZone.EdgeRules) {
-		if (!rule.Description.startsWith("astro-adapter-bunny: ")) continue;
-		rules.push({
-			Description: rule.Description,
-			Enabled: rule.Enabled,
-			OrderIndex: rule.OrderIndex,
-			ActionType: rule.ActionType,
-			ActionParameter1: rule.ActionParameter1,
-			ActionParameter2: rule.ActionParameter2,
-			TriggerMatchingType: rule.TriggerMatchingType,
-			Triggers: rule.Triggers.map((trigger) => ({
-				Type: trigger.Type,
-				Parameter1: trigger.Parameter1,
-				PatternMatches: trigger.PatternMatches,
-				PatternMatchingType: trigger.PatternMatchingType
-			}))
-		});
-	}
-	return rules;
-};
-// shared/bunny/pull-zone.ts
-const getPullZone = async ({ name }) => {
-	return (await listPullZones({ search: name })).find((pullZone) => pullZone.Name === name);
-};
-const listPullZones = ({ search }) => requestList("pullzone", { search });
-const createPullZone = ({ name, storageZoneId }) => request("POST", "pullzone", { body: {
-	Name: name,
-	OriginType: 2,
-	StorageZoneId: storageZoneId
-} });
-const purgePullZone = ({ id }) => request("POST", posix.join("pullzone", String(id), "purgeCache"));
-/**
-* Points a pull zone at a release, with the settings of docs/deploy.md and
-* the release's edge rules. Running it again is safe, so it also repairs a
-* pull zone an earlier run left halfway.
-*/
-const configurePullZone = async ({ id, name, storageZoneId, scriptId, rules, settings }) => {
-	let cache = { CacheControlMaxAgeOverride: -1 };
-	if (!scriptId) cache = {
-		CacheControlMaxAgeOverride: 2592e3,
-		CacheControlPublicMaxAgeOverride: 0
-	};
-	await request("POST", posix.join("pullzone", String(id)), { body: {
-		...settings,
-		OriginType: 2,
-		StorageZoneId: storageZoneId,
-		MiddlewareScriptId: scriptId ?? null,
-		EnableSmartCache: false,
-		IgnoreQueryStrings: false,
-		DisableCookies: false,
-		EnableCacheSlice: false,
-		...cache
-	} });
-	const hostname = new URL("https://b-cdn.net");
-	hostname.hostname = `${name}.b-cdn.net`;
-	await request("POST", posix.join("pullzone", String(id), "setForceSSL"), { body: {
-		Hostname: hostname.hostname,
-		ForceSSL: true
-	} });
-	await applyEdgeRules({
-		pullZoneId: id,
-		rules
-	});
-};
-// shared/bunny/script.ts
-const getScript = async ({ name }) => {
-	return (await requestList("compute/script", { search: name })).find((script) => script.Name === name);
-};
-// shared/bunny/storage-zone.ts
-const getStorageZone = async ({ name }) => {
-	return (await listStorageZones({ search: name })).find((zone) => zone.Name === name);
-};
-const listStorageZones = ({ search }) => requestList("storagezone", { search });
 // shared/github/deployments.ts
 const octokit = () => getOctokit(getInput("github_token", { required: true }));
 /**
 * The repository's deployments, newest first, optionally of one environment.
-* Each records the commit as `sha` and its branch in `payload.branch`.
+* Each records the commit as `sha`, and its branch and release in `payload`.
 */
 const listDeployments = async ({ environment } = {}) => {
 	const client = octokit();
@@ -36056,28 +36056,36 @@ const listDeployments = async ({ environment } = {}) => {
 	})).map((deployment) => ({
 		id: deployment.id,
 		sha: deployment.sha,
-		branch: deployment.payload.branch
-	}));
-};
-/** A branch's deployments in an environment, grouped by commit, newest commit first. */
-const deployedReleases = async ({ environment, branch }) => {
-	const deployments = await listDeployments({ environment });
-	const bySha = /* @__PURE__ */ new Map();
-	for (const deployment of deployments) {
-		if (deployment.branch !== branch) continue;
-		bySha.set(deployment.sha, [...bySha.get(deployment.sha) ?? [], deployment]);
-	}
-	return [...bySha].map(([sha, ofSha]) => ({
-		sha,
-		deployments: ofSha
+		branch: deployment.payload.branch,
+		release: deployment.payload.release
 	}));
 };
 /**
-* Records a deploy in the repository's Deployments, and marks the branch's
+* A branch's releases in an environment, newest first, each with its commit
+* and the deployments that refer to it. A release deployed twice, such as
+* after a rollback to it, counts once.
+*/
+const deployedReleases = async ({ environment, branch }) => {
+	const deployments = await listDeployments({ environment });
+	const byRelease = /* @__PURE__ */ new Map();
+	for (const deployment of deployments) {
+		if (deployment.branch !== branch || !deployment.release) continue;
+		const entry = byRelease.get(deployment.release) ?? {
+			release: deployment.release,
+			sha: deployment.sha,
+			deployments: []
+		};
+		entry.deployments.push(deployment);
+		byRelease.set(deployment.release, entry);
+	}
+	return [...byRelease.values()];
+};
+/**
+* Records a release in the repository's Deployments, and marks the branch's
 * earlier deployments in the environment inactive: only this one runs on the
 * branch's URL now.
 */
-const createDeployment = async ({ environment, sha, branch, url, production, description }) => {
+const createDeployment = async ({ environment, release, sha, branch, url, production, description }) => {
 	const client = octokit();
 	const { data: deployment } = await client.rest.repos.createDeployment({
 		...context.repo,
@@ -36086,8 +36094,11 @@ const createDeployment = async ({ environment, sha, branch, url, production, des
 		production_environment: production,
 		auto_merge: false,
 		required_contexts: [],
-		payload: { branch },
-		...description && { description }
+		payload: {
+			branch,
+			release
+		},
+		description: description ? `${description}: ${release}` : release
 	});
 	if (!("id" in deployment)) throw new Error(`GitHub did not create a deployment for ${sha}.`);
 	await client.rest.repos.createDeploymentStatus({
@@ -36137,13 +36148,11 @@ const MAX_NAME = 60;
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 52) throw new Error(`The site name ${site} is longer than 52 characters, which leaves no room for a commit.`);
+	if (site.length > 40) throw new Error(`The site name ${site} is longer than 40 characters, which leaves no room for a release.`);
 	return site;
 };
 /** The branch that was pushed, or the pull request's own branch; on a pull request context.ref is refs/pull/<n>/merge. */
 const branchName = () => context.payload.pull_request?.head.ref ?? context.ref.replace("refs/heads/", "");
-/** The name of a commit's storage zone, script and commit pull zone, such as c50ccf3-astro-adapter-bunny-voorhoede. */
-const releaseName = (sha) => `${sha.slice(0, 7)}-${siteName()}`;
 /**
 * The name of a branch's pull zone, such as feat-try-astro-adapter-bunny-voorhoede.
 * A branch too long to fit is cut, with a short hash of its full name, so two
@@ -36166,19 +36175,19 @@ const pullZoneUrl = (name) => {
 // shared/releases/release-file.ts
 /**
 * Every release's storage zone holds this file at its root, outside the site's
-* base, with the commit it was built from. A check reads it through a pull
-* zone to see which release answers.
+* base, with the release's name and the commit it was built from. A check
+* reads it through a pull zone to see which release answers.
 */
 const RELEASE_FILE = ".bunny/release.json";
 // shared/releases/wait-for-release.ts
 /**
-* Waits until a pull zone answers with a release: its release file names the
-* commit. The file is uploaded last and is not a page of the site, so this
+* Waits until a pull zone answers with a release: its release file names it.
+* The commit is not enough, since one commit can have several releases. The file is uploaded last and is not a page of the site, so this
 * tells whether the release is live on the URL, not whether the site works. A
 * new pull zone served its first file after about 5 s, and a switched one
 * answered with the new release 2 to 7 s after the switch.
 */
-const waitForRelease = async ({ url, sha }) => {
+const waitForRelease = async ({ url, release }) => {
 	const deadline = Date.now() + 12e4;
 	await poll({
 		url: new URL(RELEASE_FILE, url),
@@ -36186,7 +36195,7 @@ const waitForRelease = async ({ url, sha }) => {
 	}, async (response) => {
 		if (response.status !== 200) return `answered ${response.status}`;
 		const file = await response.json();
-		if (file.commit !== sha) return `serves commit ${file.commit}`;
+		if (file.release !== release) return `serves release ${file.release}`;
 		return true;
 	});
 };
@@ -36215,7 +36224,7 @@ const poll = async ({ url, deadline }, accept) => {
 * does not, it points the pull zone back at the release it served before and
 * fails, so a branch never stays on a release that was not confirmed.
 */
-const switchPullZone = async ({ name, sha, storageZoneId, scriptId, rules, settings }) => {
+const switchPullZone = async ({ name, release, storageZoneId, scriptId, rules, settings }) => {
 	let pullZone = await getPullZone({ name });
 	const created = !pullZone;
 	if (!pullZone) pullZone = await createPullZone({
@@ -36241,7 +36250,7 @@ const switchPullZone = async ({ name, sha, storageZoneId, scriptId, rules, setti
 	try {
 		await waitForRelease({
 			url,
-			sha
+			release
 		});
 	} catch (error) {
 		if (!previous) throw error;
@@ -36299,22 +36308,22 @@ try {
 	process.chdir(getInput("working_directory") || ".");
 	const environment = getInput("environment", { required: true });
 	const branch = branchName();
-	const sha = await targetCommit({
+	const { release: name, sha } = await targetRelease({
 		environment,
 		branch,
-		input: getInput("commit")
+		release: getInput("release"),
+		commit: getInput("commit")
 	});
-	const name = releaseName(sha);
 	const storageZone = await getStorageZone({ name });
 	if (!storageZone) throw new Error(`No release ${name}: it was never deployed, or a clean-up deleted it.`);
-	const commitPullZone = await getPullZone({ name });
-	if (!commitPullZone) throw new Error(`Release ${name} has no commit pull zone, so its edge rules are unknown.`);
-	const rules = await readEdgeRules({ pullZoneId: commitPullZone.Id });
+	const releasePullZone = await getPullZone({ name });
+	if (!releasePullZone) throw new Error(`Release ${name} has no pull zone of its own, so its edge rules are unknown.`);
+	const rules = await readEdgeRules({ pullZoneId: releasePullZone.Id });
 	const script = await getScript({ name });
 	const config = await loadConfig();
 	const url = await switchPullZone({
 		name: branchPullZoneName(branch),
-		sha,
+		release: name,
 		storageZoneId: storageZone.Id,
 		scriptId: script?.Id,
 		rules,
@@ -36322,6 +36331,7 @@ try {
 	});
 	await createDeployment({
 		environment,
+		release: name,
 		sha,
 		branch,
 		url,
@@ -36330,24 +36340,33 @@ try {
 	});
 	info(`${branch} serves ${name} again`);
 	setOutput("url", url.href);
+	setOutput("release", name);
 	setOutput("commit", sha);
 } catch (error) {
 	setFailed(error instanceof Error ? error.message : String(error));
 }
-/** The full commit to go back to: the given one, or the one deployed before the current one. */
-async function targetCommit({ environment, branch, input }) {
-	if (input) {
-		const { data } = await getOctokit(getInput("github_token", { required: true })).rest.repos.getCommit({
-			...context.repo,
-			ref: input
-		});
-		return data.sha;
-	}
-	const [current, previous] = await deployedReleases({
+/**
+* The release to go back to, from the branch's deployments in the
+* environment: the one named, the newest of the given commit, or else the one
+* deployed before the current one.
+*/
+async function targetRelease({ environment, branch, release, commit }) {
+	const releases = await deployedReleases({
 		environment,
 		branch
 	});
+	if (release) {
+		const found = releases.find((entry) => entry.release === release || entry.release === `${release}-${siteName()}`);
+		if (!found) throw new Error(`${branch} has no deployment of release ${release} in ${environment}.`);
+		return found;
+	}
+	if (commit) {
+		const found = releases.find((entry) => entry.sha.startsWith(commit.toLowerCase()));
+		if (!found) throw new Error(`${branch} has no deployment of commit ${commit} in ${environment}.`);
+		return found;
+	}
+	const [current, previous] = releases;
 	if (!current || !previous) throw new Error(`${branch} has no earlier deployment in ${environment} to go back to.`);
-	return previous.sha;
+	return previous;
 }
 export {};

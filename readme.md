@@ -45,6 +45,7 @@ The adapter only builds. The [GitHub Actions in this repository](actions/README.
     bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
 - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
   with:
+    release: ${{ steps.deploy.outputs.release }}
     environment: Production
     url: ${{ steps.deploy.outputs.branch_url }}
 ```

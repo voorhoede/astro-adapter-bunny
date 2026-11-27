@@ -15,8 +15,11 @@ inputs:
   environment:
     description: The GitHub environment the branch deploys to, such as "Site Production"
     required: true
+  release:
+    description: The release to go back to, as the Deployments page names it, or only its commit and build, such as c50ccf3-412; takes precedence over commit
+    default: ""
   commit:
-    description: The commit to go back to, short or full; empty for the release before the current one
+    description: The commit to go back to, short or full, whose newest release is used; with neither, the release before the current one
     default: ""
   production:
     description: Whether GitHub shows the deployment as production; defaults to whether the branch is the repository's default branch. A second build of that branch, such as a preview, sets false.
@@ -28,6 +31,8 @@ inputs:
 outputs:
   url:
     description: The branch's URL
+  release:
+    description: The release the branch serves now
   commit:
     description: The commit the branch serves now
 

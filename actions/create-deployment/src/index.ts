@@ -8,6 +8,7 @@ try {
 
   const id = await createDeployment({
     environment: getInput("environment", { required: true }),
+    release: getInput("release", { required: true }),
     sha,
     branch,
     url: new URL(getInput("url", { required: true })),

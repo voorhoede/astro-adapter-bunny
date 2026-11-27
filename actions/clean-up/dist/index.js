@@ -35814,7 +35814,7 @@ function getOctokit(token, options, ...additionalPlugins) {
 const octokit = () => getOctokit(getInput("github_token", { required: true }));
 /**
 * The repository's deployments, newest first, optionally of one environment.
-* Each records the commit as `sha` and its branch in `payload.branch`.
+* Each records the commit as `sha`, and its branch and release in `payload`.
 */
 const listDeployments = async ({ environment } = {}) => {
 	const client = octokit();
@@ -35825,21 +35825,29 @@ const listDeployments = async ({ environment } = {}) => {
 	})).map((deployment) => ({
 		id: deployment.id,
 		sha: deployment.sha,
-		branch: deployment.payload.branch
+		branch: deployment.payload.branch,
+		release: deployment.payload.release
 	}));
 };
-/** A branch's deployments in an environment, grouped by commit, newest commit first. */
+/**
+* A branch's releases in an environment, newest first, each with its commit
+* and the deployments that refer to it. A release deployed twice, such as
+* after a rollback to it, counts once.
+*/
 const deployedReleases = async ({ environment, branch }) => {
 	const deployments = await listDeployments({ environment });
-	const bySha = /* @__PURE__ */ new Map();
+	const byRelease = /* @__PURE__ */ new Map();
 	for (const deployment of deployments) {
-		if (deployment.branch !== branch) continue;
-		bySha.set(deployment.sha, [...bySha.get(deployment.sha) ?? [], deployment]);
+		if (deployment.branch !== branch || !deployment.release) continue;
+		const entry = byRelease.get(deployment.release) ?? {
+			release: deployment.release,
+			sha: deployment.sha,
+			deployments: []
+		};
+		entry.deployments.push(deployment);
+		byRelease.set(deployment.release, entry);
 	}
-	return [...bySha].map(([sha, ofSha]) => ({
-		sha,
-		deployments: ofSha
-	}));
+	return [...byRelease.values()];
 };
 const markInactive = async ({ id }) => {
 	await octokit().rest.repos.createDeploymentStatus({
@@ -35866,15 +35874,13 @@ const sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").re
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 52) throw new Error(`The site name ${site} is longer than 52 characters, which leaves no room for a commit.`);
+	if (site.length > 40) throw new Error(`The site name ${site} is longer than 40 characters, which leaves no room for a release.`);
 	return site;
 };
 /** The branch that was pushed, or the pull request's own branch; on a pull request context.ref is refs/pull/<n>/merge. */
 const branchName = () => context.payload.pull_request?.head.ref ?? context.ref.replace("refs/heads/", "");
-/** The name of a commit's storage zone, script and commit pull zone, such as c50ccf3-astro-adapter-bunny-voorhoede. */
-const releaseName = (sha) => `${sha.slice(0, 7)}-${siteName()}`;
-/** The short commit of a release of this site, or undefined for any other name. */
-const releaseSha = (name) => new RegExp(`^([0-9a-f]{7})-${siteName()}$`).exec(name)?.[1];
+/** Whether a name is a release of this site, as releaseName makes it. */
+const isReleaseName = (name) => new RegExp(`^[0-9a-f]{7}-\\d+(-\\d+)?-${siteName()}$`).test(name);
 /** Whether a resource belongs to this site: a release or a branch pull zone. */
 const isSiteResource = (name) => name.endsWith(`-${siteName()}`);
 // shared/bunny/request.ts
@@ -35964,22 +35970,22 @@ const listStorageZones = ({ search }) => requestList("storagezone", { search });
 const deleteStorageZone = ({ id }) => request("DELETE", posix.join("storagezone", String(id)));
 // shared/releases/is-served.ts
 /**
-* Whether a branch pull zone of the site points at this storage zone. Commit
-* pull zones do not count. Each pull zone is asked on its own: a list read
+* Whether a branch pull zone of the site points at this storage zone. A
+* release's own pull zone does not count. Each pull zone is asked on its own: a list read
 * right after a switch once still named the old storage zone.
 */
 const isServed = async ({ storageZoneId }) => {
 	const pullZones = await listPullZones({ search: siteName() });
 	for (const pullZone of pullZones) {
 		if (!isSiteResource(pullZone.Name)) continue;
-		if (releaseSha(pullZone.Name)) continue;
+		if (isReleaseName(pullZone.Name)) continue;
 		if ((await getPullZoneById({ id: pullZone.Id })).StorageZoneId === storageZoneId) return true;
 	}
 	return false;
 };
 // shared/releases/delete-release.ts
 /**
-* Deletes a release: its commit pull zone first, so nothing serves it, then
+* Deletes a release: its own pull zone first, so nothing serves it, then
 * its script and storage zone. Answers "gone" when it no longer exists, also
 * when an earlier run deleted it, and "served" when a branch pull zone still
 * points at it, which keeps it.
@@ -35996,14 +36002,13 @@ const deleteRelease = async ({ name }) => {
 };
 // shared/releases/delete-releases.ts
 /**
-* Deletes the releases of these commits one at a time, and the deployments
+* Deletes these releases one at a time, and the deployments
 * that refer to a release once it is gone. A release a branch pull zone
 * still serves stays, and so do its deployments.
 */
 const deleteReleases = async ({ releases }) => {
 	const deleted = [];
-	for (const { sha, deployments } of releases) {
-		const name = releaseName(sha);
+	for (const { release: name, deployments } of releases) {
 		if (await deleteRelease({ name }) === "served") {
 			info(`Kept release ${name}: a branch pull zone serves it`);
 			continue;

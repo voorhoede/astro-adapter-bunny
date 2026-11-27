@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** every build is a release of its own, named `{commit}-{build}-{site}-{owner}` after the workflow run, so a rebuild of the same commit, such as for changed content, no longer changes the release that is live. A site's name with its owner may have up to 40 characters.
+- **Breaking:** `deploy` outputs `release` and `release_url` instead of `commit_url`, and `create-deployment` takes the deploy's `release` as a required input.
+- `clean-up`, `teardown` and `clean-up-orphans` count and delete releases instead of commits, and a deployment names its release.
+- `rollback` takes a `release` to go back to; with a `commit`, it goes back to that commit's newest release.
+
 ### Fixed
 - The recipes no longer record two deployments per deploy: a job uses its environment with `deployment: false`.
 

@@ -6,6 +6,9 @@ inputs:
   environment:
     description: The GitHub environment, such as "Site Production"
     required: true
+  release:
+    description: The release that was deployed, the deploy action's release output
+    required: true
   url:
     description: The URL the deployment links to, such as the deploy action's branch_url
     required: true

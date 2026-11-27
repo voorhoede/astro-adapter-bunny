@@ -54,6 +54,7 @@ jobs:
             API_TOKEN=${{ secrets.API_TOKEN }}
       - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
         with:
+          release: ${{ steps.deploy.outputs.release }}
           environment: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
           url: ${{ steps.deploy.outputs.branch_url }}
       # main keeps five releases to roll back to; a pull request only needs the one it shows.
@@ -99,8 +100,6 @@ jobs:
 ```
 
 The teardown deletes the branch's pull zone, its releases and their deployments. It refuses the default branch. A release that another branch's pull zone still serves stays.
-
-Right after a release is deleted, bunny.net refuses a new storage zone with its name for a while, so reopening a pull request right after it closed can fail the first deploy of the same commit. A new push, or running the deploy again a little later, works.
 
 ## Search engines
 

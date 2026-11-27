@@ -1,13 +1,13 @@
 import { getBooleanInput, getInput } from "@actions/core";
 import { context, getOctokit } from "@actions/github";
 
-export type Deployment = { id: number; sha: string; branch: string | undefined };
+export type Deployment = { id: number; sha: string; branch: string | undefined; release: string | undefined };
 
 const octokit = () => getOctokit(getInput("github_token", { required: true }));
 
 /**
  * The repository's deployments, newest first, optionally of one environment.
- * Each records the commit as `sha` and its branch in `payload.branch`.
+ * Each records the commit as `sha`, and its branch and release in `payload`.
  */
 export const listDeployments = async ({ environment }: { environment?: string } = {}) => {
   const client = octokit();
@@ -22,32 +22,40 @@ export const listDeployments = async ({ environment }: { environment?: string } 
       id: deployment.id,
       sha: deployment.sha,
       branch: (deployment.payload as { branch?: string }).branch,
+      release: (deployment.payload as { release?: string }).release,
     }),
   );
 };
 
-/** A branch's deployments in an environment, grouped by commit, newest commit first. */
+/**
+ * A branch's releases in an environment, newest first, each with its commit
+ * and the deployments that refer to it. A release deployed twice, such as
+ * after a rollback to it, counts once.
+ */
 export const deployedReleases = async ({ environment, branch }: { environment: string; branch: string }) => {
   const deployments = await listDeployments({ environment });
 
-  const bySha = new Map<string, Deployment[]>();
+  const byRelease = new Map<string, { release: string; sha: string; deployments: Deployment[] }>();
   for (const deployment of deployments) {
-    if (deployment.branch !== branch) {
+    if (deployment.branch !== branch || !deployment.release) {
       continue;
     }
-    bySha.set(deployment.sha, [...(bySha.get(deployment.sha) ?? []), deployment]);
+    const entry = byRelease.get(deployment.release) ?? { release: deployment.release, sha: deployment.sha, deployments: [] };
+    entry.deployments.push(deployment);
+    byRelease.set(deployment.release, entry);
   }
 
-  return [...bySha].map(([sha, ofSha]) => ({ sha, deployments: ofSha }));
+  return [...byRelease.values()];
 };
 
 /**
- * Records a deploy in the repository's Deployments, and marks the branch's
+ * Records a release in the repository's Deployments, and marks the branch's
  * earlier deployments in the environment inactive: only this one runs on the
  * branch's URL now.
  */
 export const createDeployment = async ({
   environment,
+  release,
   sha,
   branch,
   url,
@@ -55,6 +63,7 @@ export const createDeployment = async ({
   description,
 }: {
   environment: string;
+  release: string;
   sha: string;
   branch: string;
   url: URL;
@@ -72,8 +81,9 @@ export const createDeployment = async ({
     // Without these GitHub merges the default branch into the ref first, and waits for the commit's checks.
     auto_merge: false,
     required_contexts: [],
-    payload: { branch },
-    ...(description && { description }),
+    payload: { branch, release },
+    // The release, since one commit can have several; shown on the Deployments page.
+    description: description ? `${description}: ${release}` : release,
   });
 
   if (!("id" in deployment)) {

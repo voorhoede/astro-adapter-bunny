@@ -36087,15 +36087,30 @@ const MAX_NAME = 60;
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 52) throw new Error(`The site name ${site} is longer than 52 characters, which leaves no room for a commit.`);
+	if (site.length > 40) throw new Error(`The site name ${site} is longer than 40 characters, which leaves no room for a release.`);
 	return site;
 };
 /** The branch that was pushed, or the pull request's own branch; on a pull request context.ref is refs/pull/<n>/merge. */
 const branchName = () => context.payload.pull_request?.head.ref ?? context.ref.replace("refs/heads/", "");
 /** The commit that was built: a pull request's own commit, not the merge commit GitHub makes. */
 const commitSha = () => context.payload.pull_request?.head.sha ?? context.sha;
-/** The name of a commit's storage zone, script and commit pull zone, such as c50ccf3-astro-adapter-bunny-voorhoede. */
-const releaseName = (sha) => `${sha.slice(0, 7)}-${siteName()}`;
+/**
+* This run's build: the workflow's run number, and the attempt when it ran
+* again. Both only go up, so a build never reuses the name of a release that
+* was deleted, which bunny.net refuses for a while after.
+*/
+const buildId = () => context.runAttempt > 1 ? `${context.runNumber}-${context.runAttempt}` : String(context.runNumber);
+/**
+* The name of this run's release, its storage zone, script and pull zone, such
+* as c50ccf3-412-astro-adapter-bunny-voorhoede: the commit, then the build. A
+* rebuild of the same commit, such as for changed content, is a release of its
+* own. A deploy and the steps after it in the same run get the same name.
+*/
+const releaseName = () => {
+	const name = `${commitSha().slice(0, 7)}-${buildId()}-${siteName()}`;
+	if (name.length > MAX_NAME) throw new Error(`The release name ${name} is longer than ${MAX_NAME} characters.`);
+	return name;
+};
 /**
 * The name of a branch's pull zone, such as feat-try-astro-adapter-bunny-voorhoede.
 * A branch too long to fit is cut, with a short hash of its full name, so two
@@ -36118,12 +36133,13 @@ const pullZoneUrl = (name) => {
 // shared/releases/release-file.ts
 /**
 * Every release's storage zone holds this file at its root, outside the site's
-* base, with the commit it was built from. A check reads it through a pull
-* zone to see which release answers.
+* base, with the release's name and the commit it was built from. A check
+* reads it through a pull zone to see which release answers.
 */
 const RELEASE_FILE = ".bunny/release.json";
-const uploadReleaseFile = async ({ storageZone, sha }) => {
+const uploadReleaseFile = async ({ storageZone, release, sha }) => {
 	const body = new TextEncoder().encode(JSON.stringify({
+		release,
 		commit: sha,
 		deployedAt: (/* @__PURE__ */ new Date()).toISOString()
 	}));
@@ -36135,13 +36151,13 @@ const uploadReleaseFile = async ({ storageZone, sha }) => {
 };
 // shared/releases/wait-for-release.ts
 /**
-* Waits until a pull zone answers with a release: its release file names the
-* commit. The file is uploaded last and is not a page of the site, so this
+* Waits until a pull zone answers with a release: its release file names it.
+* The commit is not enough, since one commit can have several releases. The file is uploaded last and is not a page of the site, so this
 * tells whether the release is live on the URL, not whether the site works. A
 * new pull zone served its first file after about 5 s, and a switched one
 * answered with the new release 2 to 7 s after the switch.
 */
-const waitForRelease = async ({ url, sha }) => {
+const waitForRelease = async ({ url, release }) => {
 	const deadline = Date.now() + 12e4;
 	await poll({
 		url: new URL(RELEASE_FILE, url),
@@ -36149,7 +36165,7 @@ const waitForRelease = async ({ url, sha }) => {
 	}, async (response) => {
 		if (response.status !== 200) return `answered ${response.status}`;
 		const file = await response.json();
-		if (file.commit !== sha) return `serves commit ${file.commit}`;
+		if (file.release !== release) return `serves release ${file.release}`;
 		return true;
 	});
 };
@@ -36178,7 +36194,7 @@ const poll = async ({ url, deadline }, accept) => {
 * does not, it points the pull zone back at the release it served before and
 * fails, so a branch never stays on a release that was not confirmed.
 */
-const switchPullZone = async ({ name, sha, storageZoneId, scriptId, rules, settings }) => {
+const switchPullZone = async ({ name, release, storageZoneId, scriptId, rules, settings }) => {
 	let pullZone = await getPullZone({ name });
 	const created = !pullZone;
 	if (!pullZone) pullZone = await createPullZone({
@@ -36204,7 +36220,7 @@ const switchPullZone = async ({ name, sha, storageZoneId, scriptId, rules, setti
 	try {
 		await waitForRelease({
 			url,
-			sha
+			release
 		});
 	} catch (error) {
 		if (!previous) throw error;
@@ -36485,7 +36501,7 @@ try {
 	});
 	const config = await loadConfig();
 	const sha = commitSha();
-	const name = releaseName(sha);
+	const name = releaseName();
 	const clientDir = manifest.assets.dir;
 	const hasScript = manifest.script !== void 0;
 	const rules = buildEdgeRules({
@@ -36538,6 +36554,7 @@ try {
 			});
 			await uploadReleaseFile({
 				storageZone,
+				release: name,
 				sha
 			});
 		})(),
@@ -36551,16 +36568,17 @@ try {
 			});
 		})()
 	]);
-	const commitUrl = pullZoneUrl(name);
+	const releaseUrl = pullZoneUrl(name);
 	await waitForRelease({
-		url: commitUrl,
-		sha
+		url: releaseUrl,
+		release: name
 	});
-	info(`Commit URL: ${commitUrl.href}`);
-	setOutput("commit_url", commitUrl.href);
+	info(`Release URL: ${releaseUrl.href}`);
+	setOutput("release", name);
+	setOutput("release_url", releaseUrl.href);
 	const branchUrl = await switchPullZone({
 		name: branchPullZoneName(branchName()),
-		sha,
+		release: name,
 		storageZoneId: storageZone.Id,
 		scriptId: script?.Id,
 		rules,

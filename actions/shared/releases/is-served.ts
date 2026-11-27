@@ -1,9 +1,9 @@
 import { getPullZoneById, listPullZones } from "../bunny/pull-zone.ts";
-import { isSiteResource, releaseSha, siteName } from "../github/names.ts";
+import { isSiteResource, isReleaseName, siteName } from "../github/names.ts";
 
 /**
- * Whether a branch pull zone of the site points at this storage zone. Commit
- * pull zones do not count. Each pull zone is asked on its own: a list read
+ * Whether a branch pull zone of the site points at this storage zone. A
+ * release's own pull zone does not count. Each pull zone is asked on its own: a list read
  * right after a switch once still named the old storage zone.
  */
 export const isServed = async ({ storageZoneId }: { storageZoneId: number }) => {
@@ -12,8 +12,8 @@ export const isServed = async ({ storageZoneId }: { storageZoneId: number }) => 
     if (!isSiteResource(pullZone.Name)) {
       continue;
     }
-    // A commit pull zone always serves its own release.
-    if (releaseSha(pullZone.Name)) {
+    // A release's own pull zone always serves it.
+    if (isReleaseName(pullZone.Name)) {
       continue;
     }
     const current = await getPullZoneById({ id: pullZone.Id });

@@ -14,14 +14,14 @@ import { waitForRelease } from "./wait-for-release.ts";
  */
 export const switchPullZone = async ({
   name,
-  sha,
+  release,
   storageZoneId,
   scriptId,
   rules,
   settings,
 }: {
   name: string;
-  sha: string;
+  release: string;
   storageZoneId: number;
   scriptId?: number;
   rules: EdgeRule[];
@@ -48,7 +48,7 @@ export const switchPullZone = async ({
   await purgePullZone({ id: pullZone.Id });
 
   try {
-    await waitForRelease({ url, sha });
+    await waitForRelease({ url, release });
   } catch (error) {
     if (!previous) {
       throw error;

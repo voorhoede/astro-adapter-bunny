@@ -11,8 +11,8 @@ export const sanitizeName = (name: string) =>
 
 // bunny.net takes a pull zone name of 5 to 60 characters, and a storage zone name of up to 63.
 const MAX_NAME = 60;
-// What a release adds before the site: seven hex characters and a hyphen.
-const RELEASE_PREFIX = 8;
+// Room a release keeps before the site: the commit, the build and their hyphens, such as c50ccf3-12345-2-.
+const RELEASE_PREFIX = 20;
 
 /**
  * The site and its owner, such as astro-adapter-bunny-voorhoede. The site is
@@ -23,7 +23,7 @@ const RELEASE_PREFIX = 8;
 export const siteName = () => {
   const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
   if (site.length > MAX_NAME - RELEASE_PREFIX) {
-    throw new Error(`The site name ${site} is longer than ${MAX_NAME - RELEASE_PREFIX} characters, which leaves no room for a commit.`);
+    throw new Error(`The site name ${site} is longer than ${MAX_NAME - RELEASE_PREFIX} characters, which leaves no room for a release.`);
   }
   return site;
 };
@@ -35,11 +35,29 @@ export const branchName = () =>
 /** The commit that was built: a pull request's own commit, not the merge commit GitHub makes. */
 export const commitSha = (): string => context.payload.pull_request?.head.sha ?? context.sha;
 
-/** The name of a commit's storage zone, script and commit pull zone, such as c50ccf3-astro-adapter-bunny-voorhoede. */
-export const releaseName = (sha: string) => `${sha.slice(0, 7)}-${siteName()}`;
+/**
+ * This run's build: the workflow's run number, and the attempt when it ran
+ * again. Both only go up, so a build never reuses the name of a release that
+ * was deleted, which bunny.net refuses for a while after.
+ */
+const buildId = () => (context.runAttempt > 1 ? `${context.runNumber}-${context.runAttempt}` : String(context.runNumber));
 
-/** The short commit of a release of this site, or undefined for any other name. */
-export const releaseSha = (name: string) => new RegExp(`^([0-9a-f]{7})-${siteName()}$`).exec(name)?.[1];
+/**
+ * The name of this run's release, its storage zone, script and pull zone, such
+ * as c50ccf3-412-astro-adapter-bunny-voorhoede: the commit, then the build. A
+ * rebuild of the same commit, such as for changed content, is a release of its
+ * own. A deploy and the steps after it in the same run get the same name.
+ */
+export const releaseName = () => {
+  const name = `${commitSha().slice(0, 7)}-${buildId()}-${siteName()}`;
+  if (name.length > MAX_NAME) {
+    throw new Error(`The release name ${name} is longer than ${MAX_NAME} characters.`);
+  }
+  return name;
+};
+
+/** Whether a name is a release of this site, as releaseName makes it. */
+export const isReleaseName = (name: string) => new RegExp(`^[0-9a-f]{7}-\\d+(-\\d+)?-${siteName()}$`).test(name);
 
 /** Whether a resource belongs to this site: a release or a branch pull zone. */
 export const isSiteResource = (name: string) => name.endsWith(`-${siteName()}`);

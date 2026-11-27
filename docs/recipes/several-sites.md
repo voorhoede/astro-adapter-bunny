@@ -66,6 +66,7 @@ jobs:
             API_TOKEN=${{ secrets.API_TOKEN }}
       - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
         with:
+          release: ${{ steps.deploy.outputs.release }}
           environment: ${{ matrix.environment }} ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
           url: ${{ steps.deploy.outputs.branch_url }}
       - uses: voorhoede/astro-adapter-bunny/actions/clean-up@v0.1.0
@@ -121,6 +122,7 @@ Sometimes one branch is built twice, such as a production build and a build for 
           site: ${{ env.BUNNY_SITE }}
       - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
         with:
+          release: ${{ steps.deploy.outputs.release }}
           environment: ${{ env.ENVIRONMENT }}
           url: ${{ steps.deploy.outputs.branch_url }}
           # Every deployment of the default branch counts as production unless this says otherwise.

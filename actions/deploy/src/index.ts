@@ -30,7 +30,7 @@ try {
 
   const config = await loadConfig();
   const sha = commitSha();
-  const name = releaseName(sha);
+  const name = releaseName();
   const clientDir = manifest.assets.dir;
   const hasScript = manifest.script !== undefined;
   const rules = buildEdgeRules({ manifest, files: await listFiles(clientDir) });
@@ -62,7 +62,7 @@ try {
   ]);
   setSecret(storageZone.Password);
 
-  // 2. The commit pull zone needs both; the upload and the script go alongside it.
+  // 2. The release's pull zone needs both; the upload and the script go alongside it.
   await Promise.all([
     (async () => {
       let pullZone = await getPullZone({ name });
@@ -90,7 +90,7 @@ try {
         });
       }
       // Last, so a pull zone that answers with it has every other file.
-      await uploadReleaseFile({ storageZone, sha });
+      await uploadReleaseFile({ storageZone, release: name, sha });
     })(),
     (async () => {
       if (!script || !manifest.script) {
@@ -106,15 +106,16 @@ try {
   ]);
 
   // 3. The release answers on its own URL before the visitors of its branch get it.
-  const commitUrl = pullZoneUrl(name);
-  await waitForRelease({ url: commitUrl, sha });
-  info(`Commit URL: ${commitUrl.href}`);
-  setOutput("commit_url", commitUrl.href);
+  const releaseUrl = pullZoneUrl(name);
+  await waitForRelease({ url: releaseUrl, release: name });
+  info(`Release URL: ${releaseUrl.href}`);
+  setOutput("release", name);
+  setOutput("release_url", releaseUrl.href);
 
   // 4. Then the branch's pull zone moves to it, and goes back when it does not answer with it.
   const branchUrl = await switchPullZone({
     name: branchPullZoneName(branchName()),
-    sha,
+    release: name,
     storageZoneId: storageZone.Id,
     scriptId: script?.Id,
     rules,
