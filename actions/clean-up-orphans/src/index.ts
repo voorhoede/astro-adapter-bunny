@@ -1,7 +1,7 @@
 import { getBooleanInput, getInput, info, setFailed } from "@actions/core";
 import { listStorageZones } from "../../shared/bunny/storage-zone.ts";
 import { listDeployments } from "../../shared/github/deployments.ts";
-import { siteName } from "../../shared/github/names.ts";
+import { releaseSha, siteName } from "../../shared/github/names.ts";
 import { deleteRelease } from "../../shared/releases/delete-release.ts";
 
 try {
@@ -11,18 +11,16 @@ try {
   }
   const dryRun = getBooleanInput("dry_run");
 
-  const site = siteName();
-  const [zones, deployments] = await Promise.all([listStorageZones({ search: site }), listDeployments()]);
+  const [zones, deployments] = await Promise.all([listStorageZones({ search: siteName() }), listDeployments()]);
 
   // Every commit any deployment refers to, in every environment.
   const deployed = new Set(deployments.map((deployment) => deployment.sha.slice(0, 7)));
-  // A release's storage zone is named after the site and a short hash; search also finds other names that contain the site's.
-  const isRelease = new RegExp(`^${site}-([0-9a-f]{7})$`);
   const cutoff = Date.now() - minAgeHours * 60 * 60 * 1000;
 
   for (const zone of zones) {
-    const match = isRelease.exec(zone.Name);
-    if (!match || deployed.has(match[1]!)) {
+    // Search also finds other names that contain the site's; only a release of this site counts.
+    const sha = releaseSha(zone.Name);
+    if (!sha || deployed.has(sha)) {
       continue;
     }
     // A deploy that runs now has made its release but not yet its deployment.

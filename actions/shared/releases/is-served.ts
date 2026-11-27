@@ -1,5 +1,5 @@
 import { getPullZoneById, listPullZones } from "../bunny/pull-zone.ts";
-import { siteName } from "../github/names.ts";
+import { isSiteResource, releaseSha, siteName } from "../github/names.ts";
 
 /**
  * Whether a branch pull zone of the site points at this storage zone. Commit
@@ -7,15 +7,13 @@ import { siteName } from "../github/names.ts";
  * right after a switch once still named the old storage zone.
  */
 export const isServed = async ({ storageZoneId }: { storageZoneId: number }) => {
-  const site = siteName();
-  const isCommitPullZone = new RegExp(`^${site}-[0-9a-f]{7}$`);
-
-  const pullZones = await listPullZones({ search: site });
+  const pullZones = await listPullZones({ search: siteName() });
   for (const pullZone of pullZones) {
-    if (pullZone.Name !== site && !pullZone.Name.startsWith(`${site}-`)) {
+    if (!isSiteResource(pullZone.Name)) {
       continue;
     }
-    if (isCommitPullZone.test(pullZone.Name)) {
+    // A commit pull zone always serves its own release.
+    if (releaseSha(pullZone.Name)) {
       continue;
     }
     const current = await getPullZoneById({ id: pullZone.Id });
