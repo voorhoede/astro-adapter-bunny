@@ -25,108 +25,13 @@ A deploy makes the release, checks that the commit's URL answers with it, then m
 
 ## Workflow
 
-The deploy reads the build, so it runs after the build in the same job, in the folder with `dist` and `.bunny/build.json`. Every workflow that runs an action with `environment` or `github_token` needs `deployments: write`; the examples below leave the permissions out after the first.
+The deploy reads the build, so it runs after the build in the same job, in the folder with `dist` and `.bunny/build.json`. Every workflow that runs an action with `environment` or `github_token` needs `deployments: write`.
 
-```yaml
-name: Deploy
+Complete workflows are in the recipes:
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-permissions:
-  contents: read
-  deployments: write
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
-      url: ${{ steps.deploy.outputs.branch_url }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # On a pull request, the commit people see rather than the merge commit GitHub makes.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      - run: npm ci
-      - run: npm run build
-      - id: deploy
-        uses: voorhoede/astro-adapter-bunny/actions/deploy@<ref>
-        with:
-          bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
-          secrets: |
-            API_TOKEN=${{ secrets.API_TOKEN }}
-      - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@<ref>
-        with:
-          environment: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
-          url: ${{ steps.deploy.outputs.branch_url }}
-      - uses: voorhoede/astro-adapter-bunny/actions/clean-up@<ref>
-        with:
-          bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
-          environment: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
-          releases_to_keep: ${{ github.event_name == 'pull_request' && '1' || '5' }}
-```
-
-When a pull request closes, its branch can go:
-
-```yaml
-on:
-  pull_request:
-    types: [closed]
-
-jobs:
-  teardown:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: voorhoede/astro-adapter-bunny/actions/teardown@<ref>
-        with:
-          bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
-          environment: Pull Request
-```
-
-A rollback from the Actions tab, to a given commit or to the release before the current one:
-
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      commit:
-        description: Commit to go back to; empty for the release before the current one
-        required: false
-
-jobs:
-  rollback:
-    runs-on: ubuntu-latest
-    steps:
-      # Only for bunny.config.ts; without it the pull zone keeps its settings.
-      - uses: actions/checkout@v7
-      - uses: voorhoede/astro-adapter-bunny/actions/rollback@<ref>
-        with:
-          bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
-          environment: Production
-          commit: ${{ inputs.commit }}
-```
-
-And a scheduled run for releases a cancelled or failed deploy left behind:
-
-```yaml
-on:
-  schedule:
-    - cron: "0 3 * * *"
-
-jobs:
-  clean-up-orphans:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: voorhoede/astro-adapter-bunny/actions/clean-up-orphans@<ref>
-        with:
-          bunny_api_key: ${{ secrets.BUNNY_API_KEY }}
-```
+- [Production only](../docs/recipes/production-only.md): deploy the default branch, roll back, and clean up orphans.
+- [Pull request previews](../docs/recipes/pull-request-previews.md): a preview for every pull request, torn down when it closes.
+- [Several sites](../docs/recipes/several-sites.md): several sites in one repository, and a second build of the same branch.
 
 The inputs and outputs of each action are in its `action.yml`.
 
