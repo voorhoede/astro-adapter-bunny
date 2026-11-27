@@ -20,8 +20,10 @@ inputs:
     default: ""
 
 outputs:
-  commit_url:
-    description: The commit's URL, which keeps answering with this release
+  release:
+    description: The release's name, such as 3f9a1c2e-site-owner
+  release_url:
+    description: The release's own URL, which keeps answering with this build
   branch_url:
     description: The branch's URL, which moves to the branch's newest release
 

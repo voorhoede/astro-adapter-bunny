@@ -35838,11 +35838,11 @@ function getOctokit(token, options, ...additionalPlugins) {
 // shared/github/deployments.ts
 const octokit = () => getOctokit(getInput("github_token", { required: true }));
 /**
-* Records a deploy in the repository's Deployments, and marks the branch's
+* Records a release in the repository's Deployments, and marks the branch's
 * earlier deployments in the environment inactive: only this one runs on the
 * branch's URL now.
 */
-const createDeployment = async ({ environment, sha, branch, url, production, description }) => {
+const createDeployment = async ({ environment, release, sha, branch, url, production, description }) => {
 	const client = octokit();
 	const { data: deployment } = await client.rest.repos.createDeployment({
 		...context.repo,
@@ -35851,8 +35851,11 @@ const createDeployment = async ({ environment, sha, branch, url, production, des
 		production_environment: production,
 		auto_merge: false,
 		required_contexts: [],
-		payload: { branch },
-		...description && { description }
+		payload: {
+			branch,
+			release
+		},
+		description: description ? `${description}: ${release}` : release
 	});
 	if (!("id" in deployment)) throw new Error(`GitHub did not create a deployment for ${sha}.`);
 	await client.rest.repos.createDeploymentStatus({
@@ -35902,6 +35905,7 @@ try {
 	const sha = commitSha();
 	info(`Deployment ${await createDeployment({
 		environment: getInput("environment", { required: true }),
+		release: getInput("release", { required: true }),
 		sha,
 		branch,
 		url: new URL(getInput("url", { required: true })),

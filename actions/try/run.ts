@@ -5,9 +5,10 @@
  *
  *   BUNNYNET_API_KEY=... node actions/try/run.ts deploy --sha <sha> --branch <branch> site=try working_directory=path/to/site
  *
- * --sha and --branch set the commit and branch of the run, --pull-request runs
- * it as a pull request instead of a push, and --default-branch names the
- * repository's default branch (main). Every key=value is an input; inputs
+ * --sha and --branch set the commit and branch of the run, --run and
+ * --attempt its run id and attempt (both 1), which name the release, --pull-request runs it as a
+ * pull request instead of a push, and --default-branch names the repository's
+ * default branch (main). Give the steps of one deploy the same --run. Every key=value is an input; inputs
  * left out get their default from action.yml.
  */
 import { spawn } from "node:child_process";
@@ -25,6 +26,8 @@ const { values, positionals } = parseArgs({
     "pull-request": { type: "boolean", default: false },
     "default-branch": { type: "string", default: "main" },
     repository: { type: "string", default: "voorhoede/astro-adapter-bunny" },
+    run: { type: "string", default: "1" },
+    attempt: { type: "string", default: "1" },
   },
 });
 
@@ -89,6 +92,10 @@ const env: NodeJS.ProcessEnv = {
   GITHUB_SHA: values["pull-request"] ? "f".repeat(40) : sha,
   GITHUB_REF: values["pull-request"] ? "refs/pull/1/merge" : `refs/heads/${values.branch}`,
   GITHUB_OUTPUT: outputPath,
+  // A release is named after the run and its attempt, so the steps of one deploy share them.
+  GITHUB_RUN_NUMBER: values.run,
+  GITHUB_RUN_ATTEMPT: values.attempt,
+  GITHUB_RUN_ID: values.run,
 };
 for (const [name, value] of inputs) {
   env[`INPUT_${name.toUpperCase()}`] = value;

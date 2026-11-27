@@ -4,7 +4,7 @@ GitHub Actions that deploy a site built with `astro-adapter-bunny` to bunny.net.
 
 | Action | Does |
 | --- | --- |
-| [`deploy`](deploy/action.yml) | Makes a release of the build, checks it on the commit's URL, then moves the branch's pull zone to it. |
+| [`deploy`](deploy/action.yml) | Makes a release of the build, checks it on its own URL, then moves the branch's pull zone to it. |
 | [`create-deployment`](create-deployment/action.yml) | Records the deploy in the repository's Deployments and marks the branch's earlier deployments inactive. |
 | [`clean-up`](clean-up/action.yml) | Deletes a branch's releases beyond the newest few, and their deployments. |
 | [`teardown`](teardown/action.yml) | Removes a branch's pull zone, its releases and their deployments, such as after a pull request closes. |
@@ -15,13 +15,13 @@ Use them as `voorhoede/astro-adapter-bunny/actions/<action>@<ref>`, where the re
 
 ## What a deploy makes
 
-A **release** is one build of one commit: a storage zone with the files, an Edge Script when the site has a server, and a pull zone of its own, all named `{commit}-{site}-{owner}`, such as `c50ccf3-docs-voorhoede`. Its URL, `https://c50ccf3-docs-voorhoede.b-cdn.net/`, keeps answering with that build for as long as the release exists.
+A **release** is one build of one commit: a storage zone with the files, an Edge Script when the site has a server, and a pull zone of its own, all named `{release}-{site}-{owner}`, such as `3f9a1c2e-docs-voorhoede`. The release part is a hash of the workflow run, so a rebuild of the same commit, such as for changed content, is a release of its own and never changes one that is live. The name does not say which commit a release is; its deployment and its `.bunny/release.json` do. Its URL, `https://3f9a1c2e-docs-voorhoede.b-cdn.net/`, keeps answering with that build for as long as the release exists. GitHub's Deployments name the release in their description, and a rollback can go back to it by that name.
 
-Each branch has one more pull zone, `{branch}-{site}-{owner}`, which the deploy moves to the branch's newest release. Production is the branch pull zone of the repository's default branch. A pull zone name has 5 to 60 characters, so a branch too long to fit is cut and gets a short hash of its full name.
+Each branch has one more pull zone, `{branch}-{site}-{owner}`, which the deploy moves to the branch's newest release. Production is the branch pull zone of the repository's default branch. A pull zone name has 5 to 60 characters, so a branch too long to fit is cut and gets a short hash of its full name. A release needs room for its hash, so the site's name with its owner may have up to 51 characters.
 
 `site` defaults to the repository's name, and the owner is always added, so two repositories never share a name. A repository with several sites, or a second build of the same commits such as a preview, gives each its own `site`. GitHub shows every deployment of the default branch as production, so a preview's `create-deployment` and `rollback` also set `production: false`.
 
-A deploy makes the release, checks that the commit's URL answers with it, then moves the branch's pull zone and checks that one too. When the branch does not answer with the new release, the deploy moves it back to the release it had and fails. Every deploy also applies the edge rules the build needs (headers from `_headers`, and for a site without a server its redirects, trailing slash and asset caching) and the settings from `bunny.config.ts`. [`docs/deploy.md`](../docs/deploy.md) describes each step.
+A deploy makes the release, checks that the release's URL answers with it, then moves the branch's pull zone and checks that one too. When the branch does not answer with the new release, the deploy moves it back to the release it had and fails. Every deploy also applies the edge rules the build needs (headers from `_headers`, and for a site without a server its redirects, trailing slash and asset caching) and the settings from `bunny.config.ts`. [`docs/deploy.md`](../docs/deploy.md) describes each step.
 
 ## Workflow
 
@@ -37,7 +37,7 @@ The inputs and outputs of each action are in its `action.yml`.
 
 ## Secrets and variables
 
-Script secrets and variables go in as `secrets` and `variables`, one `NAME=value` per line. Every release has its own script, so each deploy sets them all. The deploy fails before it makes anything when the build's `astro:env` schema has a required secret that `secrets` does not set.
+Script secrets and variables go in as `secrets` and `variables`, one `NAME=value` per line. Every release has its own script, so each deploy sets them all. A rollback brings back the values of the release's own deploy, unless it gets `secrets` and `variables` too: then they replace those, such as a token rotated since. The deploy fails before it makes anything when the build's `astro:env` schema has a required secret that `secrets` does not set.
 
 ## `bunny.config.ts`
 

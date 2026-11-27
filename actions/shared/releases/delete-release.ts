@@ -4,7 +4,7 @@ import { deleteStorageZone, getStorageZone } from "../bunny/storage-zone.ts";
 import { isServed } from "./is-served.ts";
 
 /**
- * Deletes a release: its commit pull zone first, so nothing serves it, then
+ * Deletes a release: its own pull zone first, so nothing serves it, then
  * its script and storage zone. Answers "gone" when it no longer exists, also
  * when an earlier run deleted it, and "served" when a branch pull zone still
  * points at it, which keeps it.

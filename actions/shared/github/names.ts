@@ -11,8 +11,8 @@ export const sanitizeName = (name: string) =>
 
 // bunny.net takes a pull zone name of 5 to 60 characters, and a storage zone name of up to 63.
 const MAX_NAME = 60;
-// What a release adds before the site: seven hex characters and a hyphen.
-const RELEASE_PREFIX = 8;
+// What a release adds before the site: its eight hex characters and a hyphen.
+const RELEASE_PREFIX = 9;
 
 /**
  * The site and its owner, such as astro-adapter-bunny-voorhoede. The site is
@@ -23,7 +23,7 @@ const RELEASE_PREFIX = 8;
 export const siteName = () => {
   const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
   if (site.length > MAX_NAME - RELEASE_PREFIX) {
-    throw new Error(`The site name ${site} is longer than ${MAX_NAME - RELEASE_PREFIX} characters, which leaves no room for a commit.`);
+    throw new Error(`The site name ${site} is longer than ${MAX_NAME - RELEASE_PREFIX} characters, which leaves no room for a release.`);
   }
   return site;
 };
@@ -35,11 +35,21 @@ export const branchName = () =>
 /** The commit that was built: a pull request's own commit, not the merge commit GitHub makes. */
 export const commitSha = (): string => context.payload.pull_request?.head.sha ?? context.sha;
 
-/** The name of a commit's storage zone, script and commit pull zone, such as c50ccf3-astro-adapter-bunny-voorhoede. */
-export const releaseName = (sha: string) => `${sha.slice(0, 7)}-${siteName()}`;
+/**
+ * The name of this run's release, its storage zone, script and pull zone, such
+ * as 3f9a1c2e-astro-adapter-bunny-voorhoede: a hash of the workflow run and
+ * its attempt, so every build is a release of its own, also a rebuild of the
+ * same commit, and a name is never used twice, which bunny.net refuses for a
+ * while after a delete. A deploy that runs again in the same attempt goes on
+ * with its own release. The commit is in the release file and the deployment.
+ */
+export const releaseName = () => {
+  const hash = createHash("sha256").update(`${context.runId}-${context.runAttempt}`).digest("hex").slice(0, 8);
+  return `${hash}-${siteName()}`;
+};
 
-/** The short commit of a release of this site, or undefined for any other name. */
-export const releaseSha = (name: string) => new RegExp(`^([0-9a-f]{7})-${siteName()}$`).exec(name)?.[1];
+/** Whether a name is a release of this site, as releaseName makes it. */
+export const isReleaseName = (name: string) => new RegExp(`^[0-9a-f]{8}-${siteName()}$`).test(name);
 
 /** Whether a resource belongs to this site: a release or a branch pull zone. */
 export const isSiteResource = (name: string) => name.endsWith(`-${siteName()}`);

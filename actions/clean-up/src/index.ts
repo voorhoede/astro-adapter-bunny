@@ -10,7 +10,7 @@ try {
     throw new Error(`releases_to_keep has to be a whole number of 0 or more, got "${getInput("releases_to_keep")}".`);
   }
 
-  // Newest commit first. A commit deployed twice, such as after a content change, counts once.
+  // Newest first. Each build is a release of its own, also a rebuild of the same commit.
   const releases = await deployedReleases({ environment, branch: branchName() });
   const older = releases.slice(releasesToKeep);
 

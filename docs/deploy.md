@@ -35,18 +35,18 @@ Paths are relative to the project root and use forward slashes. bunny.net's cont
 
 ## Resources
 
-A release is one build of one commit, and is not changed once deployed:
+A release is one build of one commit, and is not changed once deployed. A rebuild of the same commit, such as for changed content, makes a release of its own:
 
-- **A storage zone** that holds the release's `dist/client` at its root, named after the site and the commit's short hash.
+- **A storage zone** that holds the release's `dist/client` at its root, named after the release and the site, such as `3f9a1c2e-docs-voorhoede`. The release part is eight hex characters of a hash of the workflow run's id and attempt, so a name is never used twice. The release file and the GitHub deployment record its commit.
 - **A middleware Edge Script** with the release's `dist/index.js` and its variables and secrets, named like the zone, only for sites with `dist/index.js`. A script keeps the type it was created with, so it has to be created as a middleware script, not a standalone one.
-- **A commit pull zone**, named like the zone, with the storage zone as its origin and the script as its middleware. It points at its release for as long as the release exists, so the commit's URL never changes.
+- **A release pull zone**, named like the zone, with the storage zone as its origin and the script as its middleware. It points at its release for as long as the release exists, so the release's URL never changes.
 
-The storage zone and the script do not refer to each other; only a pull zone links them. So the commit pull zone can be made only once both exist.
+The storage zone and the script do not refer to each other; only a pull zone links them. So the release pull zone can be made only once both exist.
 
 Two more kinds of pull zone move between releases, pointing at one by its storage zone and its script:
 
 - **A branch pull zone** per branch that deploys, which serves as that branch's preview and moves to its newest release.
-- **A live pull zone** that holds the site's custom hostnames, added once by hand, and follows the newest release of the production branch.
+Production is the branch pull zone of the production branch; the site's custom hostnames go on it, added once by hand.
 
 Several pull zones can point at the same release. Measured on bunny.net on 2026-11-23: one middleware script served two pull zones at once, each from its own storage zone, and the script's `LinkedPullZones` listed both.
 
@@ -54,18 +54,19 @@ Several pull zones can point at the same release. Measured on bunny.net on 2026-
 
 1. **Build** the site.
 2. **Create the release's storage zone and script** at the same time, since neither needs the other. Set the storage zone's region, tier and replication regions, and its 404 page (see Static sites). Make the script only when `dist/index.js` exists.
-3. **Create the commit pull zone** with the storage zone as its origin and the script as its middleware, its settings and its rules (see below). While it is made:
+3. **Create the release pull zone** with the storage zone as its origin and the script as its middleware, its settings and its rules (see below). While it is made:
    - **upload `dist/client`** to the root of the zone, keeping paths, and under the site's `base` when it has one (see below). A new zone can refuse uploads for a few seconds, so retry the first one;
    - **set the script's code, variables and secrets**, and publish it.
-4. **Check the commit pull zone.** The branch pull zone switches only when this passes.
+4. **Check the release pull zone.** The branch pull zone switches only when this passes.
 5. **Switch the branch pull zone** to the release (see below), making it on the branch's first deploy, and check it.
-6. **Switch the live pull zone** to the same release, for the production branch, and check it again.
 
-A rollback switches a branch pull zone or live to an earlier release that still exists. No file is uploaded and no hostname moves.
+A check reads `.bunny/release.json` at the root of the release's storage zone through the pull zone: it names the release, so it tells two builds of one commit apart.
+
+A rollback switches a branch pull zone to an earlier release that still exists. No file is uploaded and no hostname moves.
 
 A release's zone starts empty, so no file of an earlier build is left behind. That matters for a site with a script: the script asks storage first for every GET and HEAD, so a leftover file would win over an on-demand route on the same path.
 
-Measured on bunny.net on 2026-11-20: a new storage zone on the Edge tier in DE accepted its first upload after 1.3 to 4.8 s, and 30 files (116 KB) took 10 to 15 s to upload, eight at a time. On 2026-11-23, after a storage zone was deleted, creating one with the same name was refused with `storagezone.name_taken` ("currently being deleted") for the 10 minutes tried. So redeploying a commit whose release was just deleted fails for a while.
+Measured on bunny.net on 2026-11-20: a new storage zone on the Edge tier in DE accepted its first upload after 1.3 to 4.8 s, and 30 files (116 KB) took 10 to 15 s to upload, eight at a time. On 2026-11-23, after a storage zone was deleted, creating one with the same name was refused with `storagezone.name_taken` ("currently being deleted") for the 10 minutes tried. Since every build has a name of its own, a new deploy never asks for a name that is being deleted.
 
 ## Switching a pull zone
 
@@ -198,7 +199,7 @@ Limits: every distinct value takes one edge rule, from the same 50 as the redire
 
 - **Secrets** from `astro:env` (`access: 'secret'`) and anything read through `process.env` at runtime are script variables.
 - A script takes 128 variables (129 breaks startup), 2 KB per value at runtime, and the API refuses values over 4,096 characters. About 242 to 254 KB of values in total answered 431.
-- Variables belong to a script, and every release has its own script, so the tool sets them all on every deploy. A rollback brings back the values the earlier release had, including ones revoked since.
+- Variables belong to a script, and every release has its own script, so the tool sets them all on every deploy. A rollback brings back the values the earlier release had, including ones revoked since, unless it sets the current ones on that script and publishes it before switching. Measured on bunny.net on 2026-11-27: publishing an earlier release's script with a changed variable, and no new code, served the new value after the switch.
 
 ## Optional
 

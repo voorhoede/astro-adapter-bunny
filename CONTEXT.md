@@ -11,16 +11,16 @@ One Astro project deployed to bunny.net, named after its repository unless set; 
 _Avoid_: project, app
 
 **Release**:
-Everything bunny.net holds for one commit of a site: its storage zone, its script and its commit pull zone.
+Everything bunny.net holds for one build of a commit of a site: its storage zone, its script and its release pull zone. A rebuild of the same commit, such as for changed content, is a release of its own.
 _Avoid_: build, version, deploy (for the bunny.net side)
 
-**Commit pull zone**:
+**Release pull zone**:
 The pull zone that serves one release for as long as the release exists.
-_Avoid_: release pull zone
+_Avoid_: commit pull zone
 
-**Commit URL**:
-The address of a commit pull zone, which always answers with that commit's release.
-_Avoid_: preview URL, permalink
+**Release URL**:
+The address of a release pull zone, which always answers with that release.
+_Avoid_: commit URL, preview URL, permalink
 
 **Branch pull zone**:
 The pull zone of a branch, which moves to the branch's newest release.
@@ -59,5 +59,5 @@ _Avoid_: stale release, dangling release
 ### On GitHub
 
 **Deployment**:
-GitHub's record that a commit's release reached a branch, with the branch URL it answers on.
+GitHub's record that a release reached a branch, with its commit and the branch URL it answers on.
 _Avoid_: release (for the GitHub side)

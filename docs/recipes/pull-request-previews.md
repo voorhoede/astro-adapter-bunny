@@ -31,9 +31,10 @@ jobs:
     concurrency:
       group: deploy-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    # The environment's secrets, without a deployment of GitHub's own: the actions record the release.
     environment:
       name: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
-      url: ${{ steps.deploy.outputs.branch_url }}
+      deployment: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,6 +54,7 @@ jobs:
             API_TOKEN=${{ secrets.API_TOKEN }}
       - uses: voorhoede/astro-adapter-bunny/actions/create-deployment@v0.1.0
         with:
+          release: ${{ steps.deploy.outputs.release }}
           environment: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
           url: ${{ steps.deploy.outputs.branch_url }}
       # main keeps five releases to roll back to; a pull request only needs the one it shows.
@@ -63,7 +65,7 @@ jobs:
           releases_to_keep: ${{ github.event_name == 'pull_request' && '1' || '5' }}
 ```
 
-A pull request from `feat/new-header` answers at `https://feat-new-header-{repository}-{owner}.b-cdn.net/`, and GitHub links it from the pull request as a deployment. A branch name too long for bunny.net's 60 characters is cut and gets a short hash.
+A pull request from `feat/new-header` answers at `https://feat-new-header-{repository}-{owner}.b-cdn.net/`, and GitHub links it from the pull request as a deployment. The job uses its environment with `deployment: false`: it gets that environment's secrets, while `create-deployment` records the one deployment, with the release, instead of GitHub adding one of its own. A branch name too long for bunny.net's 60 characters is cut and gets a short hash.
 
 The two environments can hold different secrets, such as a token for draft content in `Pull Request`. The actions only read what the workflow passes them, so the environment decides.
 
@@ -98,8 +100,6 @@ jobs:
 ```
 
 The teardown deletes the branch's pull zone, its releases and their deployments. It refuses the default branch. A release that another branch's pull zone still serves stays.
-
-Right after a release is deleted, bunny.net refuses a new storage zone with its name for a while, so reopening a pull request right after it closed can fail the first deploy of the same commit. A new push, or running the deploy again a little later, works.
 
 ## Search engines
 

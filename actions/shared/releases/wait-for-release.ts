@@ -1,22 +1,22 @@
 import { RELEASE_FILE } from "./release-file.ts";
 
 /**
- * Waits until a pull zone answers with a release: its release file names the
- * commit. The file is uploaded last and is not a page of the site, so this
+ * Waits until a pull zone answers with a release: its release file names it.
+ * The commit is not enough, since one commit can have several releases. The file is uploaded last and is not a page of the site, so this
  * tells whether the release is live on the URL, not whether the site works. A
  * new pull zone served its first file after about 5 s, and a switched one
  * answered with the new release 2 to 7 s after the switch.
  */
-export const waitForRelease = async ({ url, sha }: { url: URL; sha: string }) => {
+export const waitForRelease = async ({ url, release }: { url: URL; release: string }) => {
   const deadline = Date.now() + 120_000;
 
   await poll({ url: new URL(RELEASE_FILE, url), deadline }, async (response) => {
     if (response.status !== 200) {
       return `answered ${response.status}`;
     }
-    const file = (await response.json()) as { commit?: string };
-    if (file.commit !== sha) {
-      return `serves commit ${file.commit}`;
+    const file = (await response.json()) as { release?: string };
+    if (file.release !== release) {
+      return `serves release ${file.release}`;
     }
     return true;
   });

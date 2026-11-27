@@ -35913,7 +35913,7 @@ function getOctokit(token, options, ...additionalPlugins) {
 const octokit = () => getOctokit(getInput("github_token", { required: true }));
 /**
 * The repository's deployments, newest first, optionally of one environment.
-* Each records the commit as `sha` and its branch in `payload.branch`.
+* Each records the commit as `sha`, and its branch and release in `payload`.
 */
 const listDeployments = async ({ environment } = {}) => {
 	const client = octokit();
@@ -35924,7 +35924,8 @@ const listDeployments = async ({ environment } = {}) => {
 	})).map((deployment) => ({
 		id: deployment.id,
 		sha: deployment.sha,
-		branch: deployment.payload.branch
+		branch: deployment.payload.branch,
+		release: deployment.payload.release
 	}));
 };
 // shared/github/names.ts
@@ -35937,11 +35938,11 @@ const sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").re
 */
 const siteName = () => {
 	const site = `${sanitizeName(getInput("site") || context.repo.repo)}-${sanitizeName(context.repo.owner)}`;
-	if (site.length > 52) throw new Error(`The site name ${site} is longer than 52 characters, which leaves no room for a commit.`);
+	if (site.length > 51) throw new Error(`The site name ${site} is longer than 51 characters, which leaves no room for a release.`);
 	return site;
 };
-/** The short commit of a release of this site, or undefined for any other name. */
-const releaseSha = (name) => new RegExp(`^([0-9a-f]{7})-${siteName()}$`).exec(name)?.[1];
+/** Whether a name is a release of this site, as releaseName makes it. */
+const isReleaseName = (name) => new RegExp(`^[0-9a-f]{8}-${siteName()}$`).test(name);
 /** Whether a resource belongs to this site: a release or a branch pull zone. */
 const isSiteResource = (name) => name.endsWith(`-${siteName()}`);
 // shared/bunny/pull-zone.ts
@@ -35958,22 +35959,22 @@ const getScript = async ({ name }) => {
 const deleteScript = ({ id }) => request$1("DELETE", posix.join("compute/script", String(id)), { search: { deleteLinkedPullZones: "false" } });
 // shared/releases/is-served.ts
 /**
-* Whether a branch pull zone of the site points at this storage zone. Commit
-* pull zones do not count. Each pull zone is asked on its own: a list read
+* Whether a branch pull zone of the site points at this storage zone. A
+* release's own pull zone does not count. Each pull zone is asked on its own: a list read
 * right after a switch once still named the old storage zone.
 */
 const isServed = async ({ storageZoneId }) => {
 	const pullZones = await listPullZones({ search: siteName() });
 	for (const pullZone of pullZones) {
 		if (!isSiteResource(pullZone.Name)) continue;
-		if (releaseSha(pullZone.Name)) continue;
+		if (isReleaseName(pullZone.Name)) continue;
 		if ((await getPullZoneById({ id: pullZone.Id })).StorageZoneId === storageZoneId) return true;
 	}
 	return false;
 };
 // shared/releases/delete-release.ts
 /**
-* Deletes a release: its commit pull zone first, so nothing serves it, then
+* Deletes a release: its own pull zone first, so nothing serves it, then
 * its script and storage zone. Answers "gone" when it no longer exists, also
 * when an earlier run deleted it, and "served" when a branch pull zone still
 * points at it, which keeps it.
@@ -35994,11 +35995,10 @@ try {
 	if (!Number.isFinite(minAgeHours) || minAgeHours < 0) throw new Error(`min_age_hours has to be a number of 0 or more, got "${getInput("min_age_hours")}".`);
 	const dryRun = getBooleanInput("dry_run");
 	const [zones, deployments] = await Promise.all([listStorageZones({ search: siteName() }), listDeployments()]);
-	const deployed = new Set(deployments.map((deployment) => deployment.sha.slice(0, 7)));
+	const deployed = new Set(deployments.map((deployment) => deployment.release));
 	const cutoff = Date.now() - minAgeHours * 60 * 60 * 1e3;
 	for (const zone of zones) {
-		const sha = releaseSha(zone.Name);
-		if (!sha || deployed.has(sha)) continue;
+		if (!isReleaseName(zone.Name) || deployed.has(zone.Name)) continue;
 		const modified = new Date(/Z|[+-]\d\d:\d\d$/.test(zone.DateModified) ? zone.DateModified : `${zone.DateModified}Z`);
 		if (Number.isNaN(modified.getTime()) || modified.getTime() > cutoff) continue;
 		if (dryRun) {
