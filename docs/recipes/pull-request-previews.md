@@ -31,9 +31,10 @@ jobs:
     concurrency:
       group: deploy-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    # The environment's secrets, without a deployment of GitHub's own: the actions record the release.
     environment:
       name: ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
-      url: ${{ steps.deploy.outputs.branch_url }}
+      deployment: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,7 +64,7 @@ jobs:
           releases_to_keep: ${{ github.event_name == 'pull_request' && '1' || '5' }}
 ```
 
-A pull request from `feat/new-header` answers at `https://feat-new-header-{repository}-{owner}.b-cdn.net/`, and GitHub links it from the pull request as a deployment. A branch name too long for bunny.net's 60 characters is cut and gets a short hash.
+A pull request from `feat/new-header` answers at `https://feat-new-header-{repository}-{owner}.b-cdn.net/`, and GitHub links it from the pull request as a deployment. The job uses its environment with `deployment: false`: it gets that environment's secrets, while `create-deployment` records the one deployment, with the release, instead of GitHub adding one of its own. A branch name too long for bunny.net's 60 characters is cut and gets a short hash.
 
 The two environments can hold different secrets, such as a token for draft content in `Pull Request`. The actions only read what the workflow passes them, so the environment decides.
 

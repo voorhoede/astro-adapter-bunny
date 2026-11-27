@@ -42,9 +42,10 @@ jobs:
     concurrency:
       group: deploy-${{ github.head_ref || github.ref_name }}-${{ matrix.site }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    # The environment's secrets, without a deployment of GitHub's own: the actions record the release.
     environment:
       name: ${{ matrix.environment }} ${{ github.event_name == 'pull_request' && 'Pull Request' || 'Production' }}
-      url: ${{ steps.deploy.outputs.branch_url }}
+      deployment: false
     steps:
       - uses: actions/checkout@v7
         with:

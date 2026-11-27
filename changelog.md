@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The recipes no longer record two deployments per deploy: a job uses its environment with `deployment: false`.
+
 ## [0.1.0] - 2026-11-27
 
 The first release on npm.

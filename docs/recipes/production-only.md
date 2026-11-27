@@ -25,9 +25,10 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # The environment's secrets, without a deployment of GitHub's own: the actions record the release.
     environment:
       name: Production
-      url: ${{ steps.deploy.outputs.branch_url }}
+      deployment: false
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -83,9 +84,10 @@ concurrency:
 jobs:
   rollback:
     runs-on: ubuntu-latest
+    # The environment's secrets, without a deployment of GitHub's own: the actions record the release.
     environment:
       name: Production
-      url: ${{ steps.rollback.outputs.url }}
+      deployment: false
     steps:
       # For bunny.config.ts only; without it the pull zone keeps its settings.
       - uses: actions/checkout@v7
