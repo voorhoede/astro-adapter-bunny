@@ -35947,6 +35947,7 @@ const readEdgeRules = async ({ pullZoneId }) => {
 		rules.push({
 			Description: rule.Description,
 			Enabled: rule.Enabled,
+			OrderIndex: rule.OrderIndex,
 			ActionType: rule.ActionType,
 			ActionParameter1: rule.ActionParameter1,
 			ActionParameter2: rule.ActionParameter2,

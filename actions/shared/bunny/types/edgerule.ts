@@ -13,6 +13,8 @@ export type EdgeRule = {
   Triggers: Trigger[];
   Description: string;
   Enabled: boolean;
+  /** Where two rules set the same header on one URL, the higher one wins. */
+  OrderIndex?: number;
 };
 
 export type Trigger = {

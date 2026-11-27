@@ -25,7 +25,8 @@ export const buildEdgeRules = ({ manifest, files }: { manifest: BuildManifest; f
     rules.push(...redirectRules(read(redirects)));
   }
 
-  return rules;
+  // The order decides which header rule wins where two match; see headerRules.
+  return rules.map((rule, index): EdgeRule => ({ ...rule, OrderIndex: index }));
 };
 
 const read = (path?: string) => {
@@ -152,9 +153,16 @@ const redirectTarget = (segments: string[], target: string) => {
 };
 
 /**
- * Per header: the most common value for every URL without another one, and a
- * rule per other value. Each only sets the header when the response has none,
- * so a route's own header stays.
+ * Per header: one rule with the value for every URL, which is the value of
+ * `/*` when the file has it, else the most common; then a rule per other value
+ * and kind of path. Each only sets the header when the response from the
+ * origin has none, so a route's own header stays.
+ *
+ * Where two rules match one URL, the one with the higher OrderIndex wins
+ * (measured on 2026-11-27), so the rules are ordered from general to specific:
+ * the value for every URL, then wildcard paths, shortest first, then exact
+ * paths. That needs no list of exceptions, which would run into bunny.net's
+ * limit of 5 triggers per rule.
  */
 const headerRules = (file: string) => {
   const byHeader = new Map<string, Map<string, string[]>>();
@@ -176,40 +184,46 @@ const headerRules = (file: string) => {
     byHeader.set(name, values);
   }
 
-  const rules: EdgeRule[] = [];
+  const everywhere: EdgeRule[] = [];
+  const specific: { rule: EdgeRule; rank: number }[] = [];
 
   for (const [name, values] of byHeader) {
-    const [first, ...others] = [...values].sort((a, b) => b[1].length - a[1].length);
+    const sorted = [...values].sort((a, b) => b[1].length - a[1].length);
+    const first = sorted.find(([, paths]) => paths.includes("/*")) ?? sorted[0];
     if (!first) {
       continue;
     }
     const missing: Trigger = { Type: 2, Parameter1: name, PatternMatches: ["*"], PatternMatchingType: 2 };
-    const exceptions = others.flatMap(([, paths]) => paths.map(anchored));
-
-    rules.push({
-      Description: `${RULE_PREFIX}header ${name}`,
+    const rule = (description: string, value: string, triggers: Trigger[]): EdgeRule => ({
+      Description: `${RULE_PREFIX}header ${description}`,
       Enabled: true,
       ActionType: 5,
       ActionParameter1: name,
-      ActionParameter2: first[0],
+      ActionParameter2: value,
       TriggerMatchingType: 1,
-      Triggers: [missing, ...chunks(exceptions).map((patterns) => urlTrigger(patterns, 2))],
+      Triggers: [missing, ...triggers],
     });
 
-    others.forEach(([value, paths], index) => {
-      chunks(paths.map(anchored)).forEach((patterns, part) => {
-        rules.push({
-          Description: `${RULE_PREFIX}header ${name} ${index + 1}.${part + 1}`,
-          Enabled: true,
-          ActionType: 5,
-          ActionParameter1: name,
-          ActionParameter2: value,
-          TriggerMatchingType: 1,
-          Triggers: [missing, urlTrigger(patterns, 0)],
+    everywhere.push(rule(name, first[0], []));
+
+    sorted
+      .filter((entry) => entry !== first)
+      .forEach(([value, paths], index) => {
+        const wildcards = paths.filter((path) => path.includes("*"));
+        const exact = paths.filter((path) => !path.includes("*"));
+        // A longer wildcard is narrower, so it ranks after a shorter one; exact paths rank after every wildcard.
+        const groups = [
+          ...wildcards.map((path) => ({ paths: [path], rank: path.length })),
+          ...chunks(exact).map((group) => ({ paths: group, rank: Infinity })),
+        ];
+        groups.forEach((group, part) => {
+          specific.push({
+            rule: rule(`${name} ${index + 1}.${part + 1}`, value, [urlTrigger(group.paths.map(anchored), 0)]),
+            rank: group.rank,
+          });
         });
       });
-    });
   }
 
-  return rules;
+  return [...everywhere, ...specific.sort((a, b) => a.rank - b.rank).map(({ rule }) => rule)];
 };
