@@ -26,5 +26,14 @@ jobs:
       # The tag names the version; a tag that does not match package.json would publish something else than it says.
       - name: Check the tag against package.json
         run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      # A version already on npm, such as one published by hand, is not published again; its tag still releases the actions.
+      - name: Check whether npm has the version
+        id: npm
+        run: |
+          if npm view "$(node -p 'const p = require("./package.json"); `${p.name}@${p.version}`')" version --json > /dev/null 2>&1; then
+            echo "Already on npm, so this tag only releases the actions."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
       # Builds through prepare. Trusted publishing adds provenance by itself.
-      - run: npm publish
+      - if: steps.npm.outputs.published != 'true'
+        run: npm publish
