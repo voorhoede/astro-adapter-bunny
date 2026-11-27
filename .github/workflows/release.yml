@@ -1,0 +1,30 @@
+name: Release
+
+# Publishes the package to npm when a version tag is pushed, such as v0.1.0.
+# npm's trusted publishing authenticates this workflow by its file name, so renaming it breaks publishing.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  # The OIDC token npm exchanges for a publish, instead of a stored token.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      # The tag names the version; a tag that does not match package.json would publish something else than it says.
+      - name: Check the tag against package.json
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      # Builds through prepare. Trusted publishing adds provenance by itself.
+      - run: npm publish
