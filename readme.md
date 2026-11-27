@@ -2,7 +2,9 @@
 
 Run [Astro](https://astro.build/) on [bunny.net Edge Scripting](https://bunny.net/docs/scripting).
 
-The package is not published to npm yet.
+```sh
+npm install astro-adapter-bunny
+```
 
 ## Usage
 
