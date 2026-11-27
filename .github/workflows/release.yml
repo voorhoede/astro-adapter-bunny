@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes the package to npm when a version tag is pushed, such as v0.1.0.
+# Stages the package on npm when a version tag is pushed, such as v0.2.0; a maintainer approves it before it is public.
 # npm's trusted publishing authenticates this workflow by its file name, so renaming it breaks publishing.
 on:
   push:
@@ -34,6 +34,14 @@ jobs:
             echo "Already on npm, so this tag only releases the actions."
             echo "published=true" >> "$GITHUB_OUTPUT"
           fi
-      # Builds through prepare. Trusted publishing adds provenance by itself.
+      # Staged publishing needs npm 11.15.0 or later; an older npm that comes with Node is replaced.
+      - name: Check the npm version
+        run: |
+          if [ "$(printf '%s\n' 11.15.0 "$(npm --version)" | sort -V | head -1)" != 11.15.0 ]; then
+            npm install --global npm@11
+          fi
+          npm --version
+      # Builds through prepare and stages the version, which is not public until a maintainer approves it with 2FA,
+      # on npmjs.com (Staged Packages) or with `npm stage approve`. Trusted publishing adds provenance by itself.
       - if: steps.npm.outputs.published != 'true'
-        run: npm publish
+        run: npm stage publish
